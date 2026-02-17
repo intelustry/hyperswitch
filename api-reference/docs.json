@@ -530,6 +530,6 @@
     }
   },
   "contextual": {
-    "options": ["copy", "claude", "chatgpt", "view"]
+    "options": ["copy", "view", "claude", "chatgpt", "perplexity", "grok", "mcp"]
   }
 }

@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>New Gold Protocol</title>
+
+<!-- Google Analytics 4 -->
+<!-- Replace GA_MEASUREMENT_ID with your actual GA4 ID (e.g., G-XXXXXXXXXX) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'GA_MEASUREMENT_ID');
+</script>
+
+<!-- Built-in Analytics Tracker -->
+<script>
+(function() {
+  'use strict';
+
+  var ANALYTICS_KEY = 'ngp_analytics';
+
+  function getAnalytics() {
+    try {
+      return JSON.parse(localStorage.getItem(ANALYTICS_KEY)) || { views: [], events: [] };
+    } catch (e) {
+      return { views: [], events: [] };
+    }
+  }
+
+  function saveAnalytics(data) {
+    try {
+      // Keep last 1000 entries to avoid storage overflow
+      if (data.views.length > 1000) data.views = data.views.slice(-1000);
+      if (data.events.length > 1000) data.events = data.events.slice(-1000);
+      localStorage.setItem(ANALYTICS_KEY, JSON.stringify(data));
+    } catch (e) { /* storage full */ }
+  }
+
+  function trackPageView() {
+    var data = getAnalytics();
+    data.views.push({
+      timestamp: new Date().toISOString(),
+      url: window.location.href,
+      referrer: document.referrer || '(direct)',
+      userAgent: navigator.userAgent,
+      screenWidth: screen.width,
+      screenHeight: screen.height,
+      language: navigator.language
+    });
+    saveAnalytics(data);
+  }
+
+  function trackEvent(category, action, label) {
+    var data = getAnalytics();
+    data.events.push({
+      timestamp: new Date().toISOString(),
+      category: category,
+      action: action,
+      label: label || ''
+    });
+    saveAnalytics(data);
+
+    // Also send to GA4 if available
+    if (typeof gtag === 'function') {
+      gtag('event', action, {
+        event_category: category,
+        event_label: label
+      });
+    }
+  }
+
+  // Track page view on load
+  trackPageView();
+
+  // Track time on page
+  var startTime = Date.now();
+  window.addEventListener('beforeunload', function() {
+    var timeOnPage = Math.round((Date.now() - startTime) / 1000);
+    trackEvent('engagement', 'time_on_page', timeOnPage + 's');
+  });
+
+  // Track all outbound link clicks
+  document.addEventListener('click', function(e) {
+    var link = e.target.closest('a[href]');
+    if (link) {
+      var href = link.getAttribute('href');
+      trackEvent('click', 'link_click', href);
+    }
+  });
+
+  // Track scroll depth
+  var maxScroll = 0;
+  window.addEventListener('scroll', function() {
+    var scrollPct = Math.round(
+      (window.scrollY / (document.documentElement.scrollHeight - window.innerHeight)) * 100
+    );
+    if (scrollPct > maxScroll) {
+      maxScroll = scrollPct;
+      if (maxScroll === 25 || maxScroll === 50 || maxScroll === 75 || maxScroll === 100) {
+        trackEvent('scroll', 'scroll_depth', maxScroll + '%');
+      }
+    }
+  });
+
+  // Expose analytics for console access: ngpAnalytics.summary()
+  window.ngpAnalytics = {
+    raw: getAnalytics,
+    summary: function() {
+      var data = getAnalytics();
+      var totalViews = data.views.length;
+      var totalEvents = data.events.length;
+
+      // Count views per day
+      var viewsByDay = {};
+      data.views.forEach(function(v) {
+        var day = v.timestamp.slice(0, 10);
+        viewsByDay[day] = (viewsByDay[day] || 0) + 1;
+      });
+
+      // Count events by category
+      var eventsByCategory = {};
+      data.events.forEach(function(ev) {
+        eventsByCategory[ev.category] = (eventsByCategory[ev.category] || 0) + 1;
+      });
+
+      // Count link clicks
+      var linkClicks = {};
+      data.events.filter(function(ev) { return ev.action === 'link_click'; }).forEach(function(ev) {
+        linkClicks[ev.label] = (linkClicks[ev.label] || 0) + 1;
+      });
+
+      // Referrer breakdown
+      var referrers = {};
+      data.views.forEach(function(v) {
+        referrers[v.referrer] = (referrers[v.referrer] || 0) + 1;
+      });
+
+      console.table({ 'Total Page Views': totalViews, 'Total Events': totalEvents });
+      console.log('%cViews by Day:', 'font-weight:bold');
+      console.table(viewsByDay);
+      console.log('%cEvents by Category:', 'font-weight:bold');
+      console.table(eventsByCategory);
+      console.log('%cLink Clicks:', 'font-weight:bold');
+      console.table(linkClicks);
+      console.log('%cReferrers:', 'font-weight:bold');
+      console.table(referrers);
+
+      return { totalViews: totalViews, totalEvents: totalEvents, viewsByDay: viewsByDay, eventsByCategory: eventsByCategory, linkClicks: linkClicks, referrers: referrers };
+    },
+    reset: function() {
+      localStorage.removeItem(ANALYTICS_KEY);
+      console.log('Analytics data cleared.');
+    }
+  };
+})();
+</script>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+--gold: #D4A843;
+--gold-light: #F0D78C;
+--gold-dim: rgba(212,168,67,0.15);
+--bg: #000000;
+--card: #1C1C1E;
+--card2: #2C2C2E;
+--sep: #38383A;
+--label: #8E8E93;
+--txt: #FFFFFF;
+--blue: #007AFF;
+--green: #34C759;
+--sf: -apple-system, BlinkMacSystemFont, 'Inter', 'Helvetica Neue', sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+font-family: var(--sf);
+background: var(--bg);
+color: var(--txt);
+-webkit-font-smoothing: antialiased;
+overflow-x: hidden;
+width: 100%;
+}
+
+/* -- Hero -- */
+.hero {
+width: 100%;
+padding: 56px 24px 32px;
+text-align: center;
+position: relative;
+overflow: hidden;
+background: linear-gradient(165deg, #1B0F30 0%, #0D1B35 50%, #0A0A12 100%);
+}
+
+.hero::before {
+content: '';
+position: absolute;
+inset: 0;
+background:
+radial-gradient(circle at 30% 30%, rgba(212,168,67,0.25) 0%, transparent 55%),
+radial-gradient(circle at 75% 70%, rgba(100,40,180,0.12) 0%, transparent 50%);
+pointer-events: none;
+}
+
+.hero-logo {
+font-size: 52px;
+font-weight: 800;
+letter-spacing: 5px;
+background: linear-gradient(135deg, var(--gold-light) 15%, var(--gold) 55%, #B8922E 85%);
+-webkit-background-clip: text;
+-webkit-text-fill-color: transparent;
+position: relative;
+z-index: 1;
+}
+
+.hero-sub {
+font-size: 11px;
+letter-spacing: 3px;
+text-transform: uppercase;
+color: rgba(240,215,140,0.5);
+margin-top: 6px;
+position: relative;
+z-index: 1;
+}
+
+.hero-tagline {
+font-size: 17px;
+font-weight: 700;
+color: var(--txt);
+margin-top: 20px;
+position: relative;
+z-index: 1;
+letter-spacing: -0.2px;
+}
+
+.hero-desc {
+font-size: 14px;
+color: var(--label);
+line-height: 1.55;
+margin-top: 8px;
+position: relative;
+z-index: 1;
+max-width: 340px;
+margin-left: auto;
+margin-right: auto;
+}
+
+/* -- Stats Strip -- */
+.stats {
+display: flex;
+gap: 8px;
+padding: 16px;
+width: 100%;
+}
+
+.stat {
+flex: 1;
+background: var(--card);
+border-radius: 12px;
+padding: 12px 8px;
+text-align: center;
+}
+
+.stat-val {
+font-family: 'JetBrains Mono', monospace;
+font-size: 16px;
+font-weight: 600;
+color: var(--gold-light);
+}
+
+.stat-lbl {
+font-size: 10px;
+color: var(--label);
+text-transform: uppercase;
+letter-spacing: 0.5px;
+margin-top: 2px;
+}
+
+/* -- Audit Badges -- */
+.audits {
+display: flex;
+gap: 6px;
+padding: 0 16px 16px;
+justify-content: center;
+flex-wrap: wrap;
+}
+
+.audit {
+font-size: 12px;
+font-weight: 600;
+padding: 5px 12px;
+border-radius: 8px;
+border: 1px solid;
+}
+
+.audit.c { border-color: rgba(52,199,89,0.35); color: var(--green); background: rgba(52,199,89,0.08); }
+.audit.a { border-color: rgba(0,122,255,0.35); color: var(--blue); background: rgba(0,122,255,0.08); }
+.audit.t { border-color: rgba(212,168,67,0.35); color: var(--gold); background: rgba(212,168,67,0.08); }
+
+/* -- Section Cards -- */
+.section {
+margin: 0 16px 12px;
+background: var(--card);
+border-radius: 16px;
+overflow: hidden;
+}
+
+.section-head {
+padding: 14px 16px 10px;
+font-size: 16px;
+font-weight: 700;
+letter-spacing: -0.2px;
+display: flex;
+align-items: center;
+gap: 8px;
+}
+
+.section-head .icon {
+font-size: 18px;
+}
+
+/* -- Security Checks -- */
+.checks {
+padding: 0 16px 14px;
+display: flex;
+flex-direction: column;
+gap: 10px;
+}
+
+.chk {
+display: flex;
+gap: 10px;
+align-items: flex-start;
+}
+
+.chk-dot {
+width: 22px;
+height: 22px;
+border-radius: 50%;
+background: rgba(52,199,89,0.12);
+display: flex;
+align-items: center;
+justify-content: center;
+flex-shrink: 0;
+margin-top: 1px;
+}
+
+.chk-dot svg {
+width: 12px;
+height: 12px;
+}
+
+.chk-text {
+font-size: 14px;
+color: var(--label);
+line-height: 1.5;
+}
+
+.chk-text strong {
+color: var(--txt);
+font-weight: 600;
+}
+
+/* -- Steps -- */
+.steps {
+padding: 0 16px 14px;
+display: flex;
+flex-direction: column;
+gap: 12px;
+}
+
+.stp {
+display: flex;
+gap: 12px;
+align-items: flex-start;
+}
+
+.stp-num {
+width: 24px;
+height: 24px;
+border-radius: 50%;
+background: linear-gradient(135deg, var(--gold), #C49535);
+color: #000;
+font-size: 12px;
+font-weight: 700;
+display: flex;
+align-items: center;
+justify-content: center;
+flex-shrink: 0;
+margin-top: 1px;
+}
+
+.stp-text {
+font-size: 14px;
+color: var(--label);
+line-height: 1.5;
+}
+
+.stp-text strong { color: var(--txt); font-weight: 600; }
+
+.mono {
+font-family: 'JetBrains Mono', monospace;
+font-size: 10px;
+background: rgba(255,255,255,0.06);
+padding: 3px 6px;
+border-radius: 4px;
+display: inline-block;
+word-break: break-all;
+color: var(--label);
+margin-top: 3px;
+line-height: 1.4;
+}
+
+/* -- CTA Buttons -- */
+.cta-group {
+padding: 0 16px 20px;
+display: flex;
+flex-direction: column;
+gap: 10px;
+}
+
+.cta {
+display: flex;
+align-items: center;
+justify-content: center;
+gap: 8px;
+padding: 14px;
+border-radius: 14px;
+font-size: 16px;
+font-weight: 700;
+text-decoration: none;
+font-family: var(--sf);
+letter-spacing: -0.2px;
+border: none;
+cursor: pointer;
+transition: transform 0.15s, opacity 0.15s;
+}
+
+.cta:active { transform: scale(0.97); opacity: 0.85; }
+
+.cta.gold {
+background: linear-gradient(135deg, var(--gold), #C49535);
+color: #000;
+box-shadow: 0 4px 16px rgba(212,168,67,0.25);
+}
+
+.cta.outline {
+background: transparent;
+border: 1.5px solid var(--sep);
+color: var(--txt);
+font-weight: 600;
+}
+
+.cta.blue {
+background: var(--blue);
+color: #fff;
+box-shadow: 0 4px 16px rgba(0,122,255,0.2);
+}
+
+/* -- Links Section -- */
+.links {
+padding: 0 16px 14px;
+display: flex;
+flex-direction: column;
+gap: 1px;
+}
+
+.link-row {
+display: flex;
+align-items: center;
+justify-content: space-between;
+padding: 12px 0;
+border-bottom: 0.5px solid var(--sep);
+text-decoration: none;
+}
+
+.link-row:last-child { border-bottom: none; }
+
+.link-left {
+display: flex;
+align-items: center;
+gap: 10px;
+}
+
+.link-icon {
+width: 32px;
+height: 32px;
+border-radius: 8px;
+background: var(--card2);
+display: flex;
+align-items: center;
+justify-content: center;
+font-size: 16px;
+flex-shrink: 0;
+}
+
+.link-label {
+font-size: 14px;
+font-weight: 500;
+color: var(--txt);
+}
+
+.link-sub {
+font-size: 11px;
+color: var(--label);
+margin-top: 1px;
+}
+
+.link-chevron {
+color: var(--label);
+font-size: 18px;
+font-weight: 300;
+}
+
+/* -- Referral Banner -- */
+.referral {
+margin: 0 16px 12px;
+background: var(--gold-dim);
+border: 1px solid rgba(212,168,67,0.2);
+border-radius: 16px;
+padding: 16px;
+text-align: center;
+}
+
+.referral-label {
+font-size: 11px;
+text-transform: uppercase;
+letter-spacing: 2px;
+color: var(--gold);
+font-weight: 600;
+}
+
+.referral-code {
+font-family: 'JetBrains Mono', monospace;
+font-size: 28px;
+font-weight: 700;
+color: var(--gold-light);
+margin: 6px 0 4px;
+letter-spacing: 4px;
+}
+
+.referral-hint {
+font-size: 12px;
+color: var(--label);
+}
+
+/* -- Footer -- */
+.footer {
+text-align: center;
+padding: 20px 16px 48px;
+font-size: 11px;
+color: var(--label);
+line-height: 1.5;
+}
+
+.footer a {
+color: var(--blue);
+text-decoration: none;
+}
+</style>
+</head>
+<body>
+
+<!-- Hero -->
+<div class="hero">
+  <div class="hero-logo">NGP</div>
+  <div class="hero-sub">New Gold Protocol</div>
+  <div class="hero-tagline">Earn Daily Yield on LP Bonds</div>
+  <div class="hero-desc">Decentralized protocol on BNB Chain. Open-source, triple-audited, and rug-proof by design.</div>
+</div>
+
+<!-- Stats -->
+<div class="stats">
+  <div class="stat"><div class="stat-val">$2M+</div><div class="stat-lbl">Liquidity</div></div>
+  <div class="stat"><div class="stat-val">1B</div><div class="stat-lbl">Fixed Supply</div></div>
+  <div class="stat"><div class="stat-val">15K+</div><div class="stat-lbl">Holders</div></div>
+</div>
+
+<!-- Audits -->
+<div class="audits">
+  <span class="audit c">CertiK Audited &#10003;</span>
+  <span class="audit a">AVE AI &#10003;</span>
+  <span class="audit t">TokenPocket &#10003;</span>
+</div>
+
+<!-- Primary CTA -->
+<div class="cta-group">
+  <a class="cta gold" href="https://newgoldprotocol.io" target="_blank">&#128640; Get Started Now</a>
+</div>
+
+<!-- Security -->
+<div class="section">
+  <div class="section-head"><span class="icon">&#128737;&#65039;</span> Security Proof</div>
+  <div class="checks">
+    <div class="chk">
+      <div class="chk-dot"><svg viewBox="0 0 16 16" fill="none"><path d="M4 8l3 3 5-5" stroke="#34C759" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="chk-text"><strong>Open Source</strong> &mdash; Smart contract verified on BSCScan with green checkmark. Code is law.</div>
+    </div>
+    <div class="chk">
+      <div class="chk-dot"><svg viewBox="0 0 16 16" fill="none"><path d="M4 8l3 3 5-5" stroke="#34C759" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="chk-text"><strong>LP Protected</strong> &mdash; 99.98% of liquidity held by DAO Treasury Pool, not any personal wallet.</div>
+    </div>
+    <div class="chk">
+      <div class="chk-dot"><svg viewBox="0 0 16 16" fill="none"><path d="M4 8l3 3 5-5" stroke="#34C759" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="chk-text"><strong>No Transfer Function</strong> &mdash; Treasury contract has zero transfer or withdraw capability.</div>
+    </div>
+    <div class="chk">
+      <div class="chk-dot"><svg viewBox="0 0 16 16" fill="none"><path d="M4 8l3 3 5-5" stroke="#34C759" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="chk-text"><strong>Immutable Admin</strong> &mdash; Admin address cannot be changed. Multi-sig required for all operations.</div>
+    </div>
+    <div class="chk">
+      <div class="chk-dot"><svg viewBox="0 0 16 16" fill="none"><path d="M4 8l3 3 5-5" stroke="#34C759" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="chk-text"><strong>No Minting</strong> &mdash; 1 billion tokens minted once. No mint function. No mint role. Fixed supply forever.</div>
+    </div>
+  </div>
+</div>
+
+<!-- How It Works -->
+<div class="section">
+  <div class="section-head"><span class="icon">&#128736;</span> Get Started in 5 Minutes</div>
+  <div class="steps">
+    <div class="stp">
+      <div class="stp-num">1</div>
+      <div class="stp-text">Download <strong>SafePal</strong>, <strong>Trust Wallet</strong>, or <strong>TokenPocket</strong></div>
+    </div>
+    <div class="stp">
+      <div class="stp-num">2</div>
+      <div class="stp-text">Enable <strong>BNB (BEP20)</strong> chain in your wallet</div>
+    </div>
+    <div class="stp">
+      <div class="stp-num">3</div>
+      <div class="stp-text">Add custom tokens on BNB chain:<br>
+        <span class="mono">$NGP: 0xD1852cede98aaa8c11EFE8600509E51Fe5194132</span><br>
+        <span class="mono">$GAIN: 0x9190Be0Cf6F66e07e5fB535F29a86057c7B47A0e</span>
+      </div>
+    </div>
+    <div class="stp">
+      <div class="stp-num">4</div>
+      <div class="stp-text">Get <strong>BNB</strong> for gas fees and <strong>USDT (BEP20)</strong> to purchase a bond</div>
+    </div>
+    <div class="stp">
+      <div class="stp-num">5</div>
+      <div class="stp-text">Open wallet browser &rarr; <strong>newgoldprotocol.io</strong> &rarr; sign in</div>
+    </div>
+    <div class="stp">
+      <div class="stp-num">6</div>
+      <div class="stp-text">Enter referral code, pick a username, then <strong>Menu &rarr; LP Bonds</strong> &rarr; choose duration &rarr; purchase</div>
+    </div>
+    <div class="stp">
+      <div class="stp-num">7</div>
+      <div class="stp-text">Swap USDT &rarr; NGP &rarr; GAIN inside the portal for bond fuel. <strong>Yield pays daily.</strong></div>
+    </div>
+  </div>
+</div>
+
+<!-- Referral -->
+<div class="referral">
+  <div class="referral-label">Your Referral Code</div>
+  <div class="referral-code">3LQGVB</div>
+  <div class="referral-hint">Enter at signup on newgoldprotocol.io</div>
+</div>
+
+<!-- Links -->
+<div class="section">
+  <div class="section-head"><span class="icon">&#128279;</span> Verify Everything</div>
+  <div class="links">
+    <a class="link-row" href="https://bscscan.com/token/0xd1852cede98aaa8c11efe8600509e51fe5194132" target="_blank">
+      <div class="link-left">
+        <div class="link-icon">&#128203;</div>
+        <div><div class="link-label">$NGP Contract</div><div class="link-sub">BSCScan &mdash; Verified Source</div></div>
+      </div>
+      <span class="link-chevron">&rsaquo;</span>
+    </a>
+    <a class="link-row" href="https://www.certik.com/projects/new-gold-protocol" target="_blank">
+      <div class="link-left">
+        <div class="link-icon">&#128269;</div>
+        <div><div class="link-label">CertiK Audit</div><div class="link-sub">Independent Security Report</div></div>
+      </div>
+      <span class="link-chevron">&rsaquo;</span>
+    </a>
+    <a class="link-row" href="https://youtu.be/2r6jccvIn8Q" target="_blank">
+      <div class="link-left">
+        <div class="link-icon">&#9654;&#65039;</div>
+        <div><div class="link-label">Overview Video</div><div class="link-sub">How NGP works</div></div>
+      </div>
+      <span class="link-chevron">&rsaquo;</span>
+    </a>
+    <a class="link-row" href="https://youtu.be/0zB2MJYvY6A" target="_blank">
+      <div class="link-left">
+        <div class="link-icon">&#127974;</div>
+        <div><div class="link-label">Treasury Explainer</div><div class="link-sub">Where the yield comes from</div></div>
+      </div>
+      <span class="link-chevron">&rsaquo;</span>
+    </a>
+  </div>
+</div>
+
+<!-- Bottom CTAs -->
+<div class="cta-group">
+  <a class="cta gold" href="https://newgoldprotocol.io" target="_blank">&#128640; Start Earning Daily Yield</a>
+  <a class="cta outline" href="https://bscscan.com/token/0xd1852cede98aaa8c11efe8600509e51fe5194132" target="_blank">&#128203; Verify Contract on BSCScan</a>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  New Gold Protocol &middot; BNB Chain (BEP20)<br>
+  Open-source &middot; CertiK Audited &middot; No Minting<br>
+  <a href="https://newgoldprotocol.io">newgoldprotocol.io</a>
+</div>
+
+</body>
+</html>

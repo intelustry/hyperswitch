@@ -41,7 +41,7 @@ use hyperswitch_interfaces::{
     errors,
     events::connector_api_logs::ConnectorEvent,
     types::{self, Response},
-    webhooks::{IncomingWebhook, IncomingWebhookRequestDetails},
+    webhooks::{IncomingWebhook, IncomingWebhookRequestDetails, WebhookContext},
 };
 use transformers as placetopay;
 
@@ -135,9 +135,11 @@ impl ConnectorCommon for Placetopay {
             reason: Some(response.status.message),
             attempt_status: None,
             connector_transaction_id: None,
+            connector_response_reference_id: None,
             network_advice_code: None,
             network_decline_code: None,
             network_error_message: None,
+            connector_metadata: None,
         })
     }
 }
@@ -656,6 +658,7 @@ impl IncomingWebhook for Placetopay {
     fn get_webhook_event_type(
         &self,
         _request: &IncomingWebhookRequestDetails<'_>,
+        _context: Option<&WebhookContext>,
     ) -> CustomResult<IncomingWebhookEvent, errors::ConnectorError> {
         Err(report!(errors::ConnectorError::WebhooksNotImplemented))
     }
@@ -728,7 +731,8 @@ static PLACETOPAY_CONNECTOR_INFO: ConnectorInfo = ConnectorInfo {
     display_name: "PlacetoPay",
     description:
         "PlacetoPay is a Latin American financial technology company's online payment platform, offering various payment methods and integrations for businesses",
-    connector_type: enums::PaymentConnectorCategory::PaymentGateway,
+    connector_type: enums::HyperswitchConnectorCategory::PaymentGateway,
+    integration_status: enums::ConnectorIntegrationStatus::Sandbox,
 };
 
 static PLACETOPAY_SUPPORTED_WEBHOOK_FLOWS: [enums::EventClass; 0] = [];

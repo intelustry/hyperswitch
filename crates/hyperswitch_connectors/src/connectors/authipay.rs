@@ -758,6 +758,7 @@ impl webhooks::IncomingWebhook for Authipay {
     fn get_webhook_event_type(
         &self,
         _request: &webhooks::IncomingWebhookRequestDetails<'_>,
+        _context: Option<&webhooks::WebhookContext>,
     ) -> CustomResult<api_models::webhooks::IncomingWebhookEvent, errors::ConnectorError> {
         Err(report!(errors::ConnectorError::WebhooksNotImplemented))
     }
@@ -829,7 +830,8 @@ static AUTHIPAY_SUPPORTED_PAYMENT_METHODS: LazyLock<SupportedPaymentMethods> =
 static AUTHIPAY_CONNECTOR_INFO: ConnectorInfo = ConnectorInfo {
     display_name: "Authipay",
     description: "Authipay is a Fiserv-powered payment gateway for the EMEA region supporting Visa and Mastercard transactions. Features include flexible capture methods (automatic, manual, sequential), partial captures/refunds, payment tokenization, and secure HMAC SHA256 authentication.",
-    connector_type: enums::PaymentConnectorCategory::PaymentGateway,
+    connector_type: enums::HyperswitchConnectorCategory::PaymentGateway,
+    integration_status: enums::ConnectorIntegrationStatus::Sandbox,
 };
 
 static AUTHIPAY_SUPPORTED_WEBHOOK_FLOWS: [enums::EventClass; 0] = [];

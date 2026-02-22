@@ -157,6 +157,7 @@ impl<F, T> TryFrom<ResponseRouterData<F, StripebillingPaymentsResponse, T, Payme
                 network_txn_id: None,
                 connector_response_reference_id: None,
                 incremental_authorization_allowed: None,
+                authentication_data: None,
                 charges: None,
             }),
             ..item.data
@@ -384,6 +385,7 @@ impl From<StripebillingInvoiceBillingAddress> for api_models::payments::AddressD
             line3: None,
             first_name: None,
             last_name: None,
+            origin_zip: None,
         }
     }
 }
@@ -421,6 +423,9 @@ impl TryFrom<StripebillingInvoiceBody> for revenue_recovery::RevenueRecoveryInvo
             retry_count: Some(item.data.object.attempt_count),
             next_billing_at,
             billing_started_at,
+            metadata: None,
+            // TODO! This field should be handled for billing connnector integrations
+            enable_partial_authorization: None,
         })
     }
 }
@@ -559,12 +564,30 @@ impl
                     payment_method_type: common_enums::PaymentMethod::from(
                         charge_details.payment_method_details.type_of_payment_method,
                     ),
-                    card_network: Some(common_enums::CardNetwork::from(
-                        charge_details.payment_method_details.card_details.network,
-                    )),
                     // Todo: Fetch Card issuer details. Generally in the other billing connector we are getting card_issuer using the card bin info. But stripe dosent provide any such details. We should find a way for stripe billing case
-                    card_isin: None,
                     charge_id: Some(charge_details.charge_id.clone()),
+                    // Need to populate these card info field
+                    card_info: api_models::payments::AdditionalCardInfo {
+                        card_network: Some(common_enums::CardNetwork::from(
+                            charge_details.payment_method_details.card_details.network,
+                        )),
+                        card_isin: None,
+                        card_issuer: None,
+                        card_type: None,
+                        card_issuing_country: None,
+                        card_issuing_country_code: None,
+                        bank_code: None,
+                        last4: None,
+                        card_extended_bin: None,
+                        card_exp_month: None,
+                        card_exp_year: None,
+                        card_holder_name: None,
+                        payment_checks: None,
+                        authentication_data: None,
+                        is_regulated: None,
+                        signature_network: None,
+                        auth_code: None,
+                    },
                 },
             ),
             ..item.data
@@ -610,24 +633,24 @@ pub struct StripebillingRecordBackResponse {
 impl
     TryFrom<
         ResponseRouterData<
-            recovery_router_flows::RecoveryRecordBack,
+            recovery_router_flows::InvoiceRecordBack,
             StripebillingRecordBackResponse,
-            recovery_request_types::RevenueRecoveryRecordBackRequest,
-            recovery_response_types::RevenueRecoveryRecordBackResponse,
+            recovery_request_types::InvoiceRecordBackRequest,
+            recovery_response_types::InvoiceRecordBackResponse,
         >,
-    > for recovery_router_data_types::RevenueRecoveryRecordBackRouterData
+    > for recovery_router_data_types::InvoiceRecordBackRouterData
 {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(
         item: ResponseRouterData<
-            recovery_router_flows::RecoveryRecordBack,
+            recovery_router_flows::InvoiceRecordBack,
             StripebillingRecordBackResponse,
-            recovery_request_types::RevenueRecoveryRecordBackRequest,
-            recovery_response_types::RevenueRecoveryRecordBackResponse,
+            recovery_request_types::InvoiceRecordBackRequest,
+            recovery_response_types::InvoiceRecordBackResponse,
         >,
     ) -> Result<Self, Self::Error> {
         Ok(Self {
-            response: Ok(recovery_response_types::RevenueRecoveryRecordBackResponse {
+            response: Ok(recovery_response_types::InvoiceRecordBackResponse {
                 merchant_reference_id: id_type::PaymentReferenceId::from_str(
                     item.response.id.as_str(),
                 )

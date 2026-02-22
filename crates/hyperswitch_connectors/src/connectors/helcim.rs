@@ -43,7 +43,7 @@ use hyperswitch_interfaces::{
     errors,
     events::connector_api_logs::ConnectorEvent,
     types::{self, Response},
-    webhooks::{IncomingWebhook, IncomingWebhookRequestDetails},
+    webhooks::{IncomingWebhook, IncomingWebhookRequestDetails, WebhookContext},
 };
 #[cfg(feature = "v2")]
 use masking::PeekInterface;
@@ -185,9 +185,11 @@ impl ConnectorCommon for Helcim {
             reason: Some(error_string),
             attempt_status: None,
             connector_transaction_id: None,
+            connector_response_reference_id: None,
             network_advice_code: None,
             network_decline_code: None,
             network_error_message: None,
+            connector_metadata: None,
         })
     }
 }
@@ -823,6 +825,7 @@ impl IncomingWebhook for Helcim {
     fn get_webhook_event_type(
         &self,
         _request: &IncomingWebhookRequestDetails<'_>,
+        _context: Option<&WebhookContext>,
     ) -> CustomResult<IncomingWebhookEvent, errors::ConnectorError> {
         Err(report!(errors::ConnectorError::WebhooksNotImplemented))
     }
@@ -901,7 +904,8 @@ static HELCIM_CONNECTOR_INFO: ConnectorInfo = ConnectorInfo {
         display_name: "Helcim",
         description:
             "Helcim is a payment processing company that offers transparent, affordable merchant services for businesses of all sizes",
-        connector_type: enums::PaymentConnectorCategory::PaymentGateway,
+        connector_type: enums::HyperswitchConnectorCategory::PaymentGateway,
+        integration_status: enums::ConnectorIntegrationStatus::Sandbox,
     };
 
 static HELCIM_SUPPORTED_WEBHOOK_FLOWS: [enums::EventClass; 0] = [];

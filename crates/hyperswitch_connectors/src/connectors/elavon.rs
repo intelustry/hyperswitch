@@ -573,6 +573,7 @@ impl webhooks::IncomingWebhook for Elavon {
     fn get_webhook_event_type(
         &self,
         _request: &webhooks::IncomingWebhookRequestDetails<'_>,
+        _context: Option<&webhooks::WebhookContext>,
     ) -> CustomResult<api_models::webhooks::IncomingWebhookEvent, errors::ConnectorError> {
         Err(report!(errors::ConnectorError::WebhooksNotImplemented))
     }
@@ -661,7 +662,8 @@ static ELAVON_SUPPORTED_PAYMENT_METHODS: LazyLock<SupportedPaymentMethods> = Laz
 static ELAVON_CONNECTOR_INFO: ConnectorInfo = ConnectorInfo {
     display_name: "Elavon",
     description: "Elavon, a wholly owned subsidiary of U.S. Bank, has been a global leader in payment processing for more than 30 years.",
-    connector_type: enums::PaymentConnectorCategory::PaymentGateway,
+    connector_type: enums::HyperswitchConnectorCategory::PaymentGateway,
+    integration_status: enums::ConnectorIntegrationStatus::Sandbox,
 };
 
 static ELAVON_SUPPORTED_WEBHOOK_FLOWS: [enums::EventClass; 0] = [];

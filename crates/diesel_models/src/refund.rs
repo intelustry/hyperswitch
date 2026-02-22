@@ -1,5 +1,5 @@
 use common_utils::{
-    pii,
+    id_type, pii,
     types::{ChargeRefunds, ConnectorTransactionId, ConnectorTransactionIdTrait, MinorUnit},
 };
 use diesel::{AsChangeset, Identifiable, Insertable, Queryable, Selectable};
@@ -10,7 +10,8 @@ use crate::enums as storage_enums;
 #[cfg(feature = "v1")]
 use crate::schema::refund;
 #[cfg(feature = "v2")]
-use crate::schema_v2::refund;
+use crate::{schema_v2::refund, RequiredFromNullable};
+
 #[cfg(feature = "v1")]
 #[derive(
     Clone,
@@ -27,8 +28,8 @@ use crate::schema_v2::refund;
 pub struct Refund {
     pub internal_reference_id: String,
     pub refund_id: String, //merchant_reference id
-    pub payment_id: common_utils::id_type::PaymentId,
-    pub merchant_id: common_utils::id_type::MerchantId,
+    pub payment_id: id_type::PaymentId,
+    pub merchant_id: id_type::MerchantId,
     pub connector_transaction_id: ConnectorTransactionId,
     pub connector: String,
     pub connector_refund_id: Option<ConnectorTransactionId>,
@@ -50,11 +51,11 @@ pub struct Refund {
     pub attempt_id: String,
     pub refund_reason: Option<String>,
     pub refund_error_code: Option<String>,
-    pub profile_id: Option<common_utils::id_type::ProfileId>,
+    pub profile_id: Option<id_type::ProfileId>,
     pub updated_by: String,
-    pub merchant_connector_id: Option<common_utils::id_type::MerchantConnectorAccountId>,
+    pub merchant_connector_id: Option<id_type::MerchantConnectorAccountId>,
     pub charges: Option<ChargeRefunds>,
-    pub organization_id: common_utils::id_type::OrganizationId,
+    pub organization_id: id_type::OrganizationId,
     /// INFO: This field is deprecated and replaced by processor_refund_data
     pub connector_refund_data: Option<String>,
     /// INFO: This field is deprecated and replaced by processor_transaction_data
@@ -82,8 +83,8 @@ pub struct Refund {
 )]
 #[diesel(table_name = refund, primary_key(id), check_for_backend(diesel::pg::Pg))]
 pub struct Refund {
-    pub payment_id: common_utils::id_type::GlobalPaymentId,
-    pub merchant_id: common_utils::id_type::MerchantId,
+    pub payment_id: id_type::GlobalPaymentId,
+    pub merchant_id: id_type::MerchantId,
     pub connector_transaction_id: ConnectorTransactionId,
     pub connector: String,
     pub connector_refund_id: Option<ConnectorTransactionId>,
@@ -102,21 +103,22 @@ pub struct Refund {
     #[serde(with = "common_utils::custom_serde::iso8601")]
     pub modified_at: PrimitiveDateTime,
     pub description: Option<String>,
-    pub attempt_id: common_utils::id_type::GlobalAttemptId,
+    pub attempt_id: id_type::GlobalAttemptId,
     pub refund_reason: Option<String>,
     pub refund_error_code: Option<String>,
-    pub profile_id: Option<common_utils::id_type::ProfileId>,
+    pub profile_id: Option<id_type::ProfileId>,
     pub updated_by: String,
     pub charges: Option<ChargeRefunds>,
-    pub organization_id: common_utils::id_type::OrganizationId,
+    pub organization_id: id_type::OrganizationId,
     pub split_refunds: Option<common_types::refunds::SplitRefund>,
     pub unified_code: Option<String>,
     pub unified_message: Option<String>,
     pub processor_refund_data: Option<String>,
     pub processor_transaction_data: Option<String>,
-    pub id: common_utils::id_type::GlobalRefundId,
-    pub merchant_reference_id: common_utils::id_type::RefundReferenceId,
-    pub connector_id: Option<common_utils::id_type::MerchantConnectorAccountId>,
+    pub id: id_type::GlobalRefundId,
+    #[diesel(deserialize_as = RequiredFromNullable<id_type::RefundReferenceId>)]
+    pub merchant_reference_id: id_type::RefundReferenceId,
+    pub connector_id: Option<id_type::MerchantConnectorAccountId>,
 }
 
 #[cfg(feature = "v1")]
@@ -134,8 +136,8 @@ pub struct Refund {
 #[diesel(table_name = refund)]
 pub struct RefundNew {
     pub refund_id: String,
-    pub payment_id: common_utils::id_type::PaymentId,
-    pub merchant_id: common_utils::id_type::MerchantId,
+    pub payment_id: id_type::PaymentId,
+    pub merchant_id: id_type::MerchantId,
     pub internal_reference_id: String,
     pub external_reference_id: Option<String>,
     pub connector_transaction_id: ConnectorTransactionId,
@@ -156,11 +158,11 @@ pub struct RefundNew {
     pub description: Option<String>,
     pub attempt_id: String,
     pub refund_reason: Option<String>,
-    pub profile_id: Option<common_utils::id_type::ProfileId>,
+    pub profile_id: Option<id_type::ProfileId>,
     pub updated_by: String,
-    pub merchant_connector_id: Option<common_utils::id_type::MerchantConnectorAccountId>,
+    pub merchant_connector_id: Option<id_type::MerchantConnectorAccountId>,
     pub charges: Option<ChargeRefunds>,
-    pub organization_id: common_utils::id_type::OrganizationId,
+    pub organization_id: id_type::OrganizationId,
     pub split_refunds: Option<common_types::refunds::SplitRefund>,
     pub processor_refund_data: Option<String>,
     pub processor_transaction_data: Option<String>,
@@ -180,10 +182,10 @@ pub struct RefundNew {
 )]
 #[diesel(table_name = refund)]
 pub struct RefundNew {
-    pub merchant_reference_id: common_utils::id_type::RefundReferenceId,
-    pub payment_id: common_utils::id_type::GlobalPaymentId,
-    pub merchant_id: common_utils::id_type::MerchantId,
-    pub id: common_utils::id_type::GlobalRefundId,
+    pub merchant_reference_id: id_type::RefundReferenceId,
+    pub payment_id: id_type::GlobalPaymentId,
+    pub merchant_id: id_type::MerchantId,
+    pub id: id_type::GlobalRefundId,
     pub external_reference_id: Option<String>,
     pub connector_transaction_id: ConnectorTransactionId,
     pub connector: String,
@@ -201,13 +203,13 @@ pub struct RefundNew {
     #[serde(with = "common_utils::custom_serde::iso8601")]
     pub modified_at: PrimitiveDateTime,
     pub description: Option<String>,
-    pub attempt_id: common_utils::id_type::GlobalAttemptId,
+    pub attempt_id: id_type::GlobalAttemptId,
     pub refund_reason: Option<String>,
-    pub profile_id: Option<common_utils::id_type::ProfileId>,
+    pub profile_id: Option<id_type::ProfileId>,
     pub updated_by: String,
-    pub connector_id: Option<common_utils::id_type::MerchantConnectorAccountId>,
+    pub connector_id: Option<id_type::MerchantConnectorAccountId>,
     pub charges: Option<ChargeRefunds>,
-    pub organization_id: common_utils::id_type::OrganizationId,
+    pub organization_id: id_type::OrganizationId,
     pub split_refunds: Option<common_types::refunds::SplitRefund>,
     pub processor_refund_data: Option<String>,
     pub processor_transaction_data: Option<String>,
@@ -251,8 +253,8 @@ pub enum RefundUpdate {
     },
     ManualUpdate {
         refund_status: Option<storage_enums::RefundStatus>,
-        refund_error_message: Option<String>,
-        refund_error_code: Option<String>,
+        refund_error_message: Option<Option<String>>,
+        refund_error_code: Option<Option<String>>,
         updated_by: String,
     },
 }
@@ -293,8 +295,8 @@ pub enum RefundUpdate {
     },
     ManualUpdate {
         refund_status: Option<storage_enums::RefundStatus>,
-        refund_error_message: Option<String>,
-        refund_error_code: Option<String>,
+        refund_error_message: Option<Option<String>>,
+        refund_error_code: Option<Option<String>>,
         updated_by: String,
     },
 }
@@ -306,11 +308,11 @@ pub struct RefundUpdateInternal {
     connector_refund_id: Option<ConnectorTransactionId>,
     refund_status: Option<storage_enums::RefundStatus>,
     sent_to_gateway: Option<bool>,
-    refund_error_message: Option<String>,
+    refund_error_message: Option<Option<String>>,
     refund_arn: Option<String>,
     metadata: Option<pii::SecretSerdeValue>,
     refund_reason: Option<String>,
-    refund_error_code: Option<String>,
+    refund_error_code: Option<Option<String>>,
     updated_by: String,
     modified_at: PrimitiveDateTime,
     processor_refund_data: Option<String>,
@@ -327,11 +329,11 @@ pub struct RefundUpdateInternal {
     connector_refund_id: Option<ConnectorTransactionId>,
     refund_status: Option<storage_enums::RefundStatus>,
     sent_to_gateway: Option<bool>,
-    refund_error_message: Option<String>,
+    refund_error_message: Option<Option<String>>,
     refund_arn: Option<String>,
     metadata: Option<pii::SecretSerdeValue>,
     refund_reason: Option<String>,
-    refund_error_code: Option<String>,
+    refund_error_code: Option<Option<String>>,
     updated_by: String,
     modified_at: PrimitiveDateTime,
     processor_refund_data: Option<String>,
@@ -346,11 +348,11 @@ impl RefundUpdateInternal {
             connector_refund_id: self.connector_refund_id,
             refund_status: self.refund_status.unwrap_or_default(),
             sent_to_gateway: self.sent_to_gateway.unwrap_or_default(),
-            refund_error_message: self.refund_error_message,
+            refund_error_message: self.refund_error_message.unwrap_or_default(),
             refund_arn: self.refund_arn,
             metadata: self.metadata,
             refund_reason: self.refund_reason,
-            refund_error_code: self.refund_error_code,
+            refund_error_code: self.refund_error_code.unwrap_or_default(),
             updated_by: self.updated_by,
             modified_at: self.modified_at,
             processor_refund_data: self.processor_refund_data,
@@ -368,11 +370,11 @@ impl RefundUpdateInternal {
             connector_refund_id: self.connector_refund_id,
             refund_status: self.refund_status.unwrap_or_default(),
             sent_to_gateway: self.sent_to_gateway.unwrap_or_default(),
-            refund_error_message: self.refund_error_message,
+            refund_error_message: self.refund_error_message.unwrap_or_default(),
             refund_arn: self.refund_arn,
             metadata: self.metadata,
             refund_reason: self.refund_reason,
-            refund_error_code: self.refund_error_code,
+            refund_error_code: self.refund_error_code.unwrap_or_default(),
             updated_by: self.updated_by,
             modified_at: self.modified_at,
             processor_refund_data: self.processor_refund_data,
@@ -399,7 +401,7 @@ impl From<RefundUpdate> for RefundUpdateInternal {
                 connector_refund_id: Some(connector_refund_id),
                 refund_status: Some(refund_status),
                 sent_to_gateway: Some(sent_to_gateway),
-                refund_error_message,
+                refund_error_message: refund_error_message.map(Some),
                 refund_arn: Some(refund_arn),
                 updated_by,
                 processor_refund_data,
@@ -469,8 +471,8 @@ impl From<RefundUpdate> for RefundUpdateInternal {
                 issuer_error_message,
             } => Self {
                 refund_status,
-                refund_error_message,
-                refund_error_code,
+                refund_error_message: refund_error_message.map(Some),
+                refund_error_code: refund_error_code.map(Some),
                 updated_by,
                 connector_refund_id,
                 processor_refund_data,
@@ -526,7 +528,7 @@ impl From<RefundUpdate> for RefundUpdateInternal {
                 connector_refund_id: Some(connector_refund_id),
                 refund_status: Some(refund_status),
                 sent_to_gateway: Some(sent_to_gateway),
-                refund_error_message,
+                refund_error_message: refund_error_message.map(Some),
                 refund_arn: Some(refund_arn),
                 updated_by,
                 processor_refund_data,
@@ -588,8 +590,8 @@ impl From<RefundUpdate> for RefundUpdateInternal {
                 processor_refund_data,
             } => Self {
                 refund_status,
-                refund_error_message,
-                refund_error_code,
+                refund_error_message: refund_error_message.map(Some),
+                refund_error_code: refund_error_code.map(Some),
                 updated_by,
                 connector_refund_id,
                 processor_refund_data,
@@ -649,8 +651,8 @@ impl RefundUpdate {
             connector_refund_id: connector_refund_id.or(source.connector_refund_id),
             refund_status: refund_status.unwrap_or(source.refund_status),
             sent_to_gateway: sent_to_gateway.unwrap_or(source.sent_to_gateway),
-            refund_error_message: refund_error_message.or(source.refund_error_message),
-            refund_error_code: refund_error_code.or(source.refund_error_code),
+            refund_error_message: refund_error_message.map_or(source.refund_error_message, |v| v),
+            refund_error_code: refund_error_code.map_or(source.refund_error_code, |v| v),
             refund_arn: refund_arn.or(source.refund_arn),
             metadata: metadata.or(source.metadata),
             refund_reason: refund_reason.or(source.refund_reason),
@@ -688,8 +690,8 @@ impl RefundUpdate {
             connector_refund_id: connector_refund_id.or(source.connector_refund_id),
             refund_status: refund_status.unwrap_or(source.refund_status),
             sent_to_gateway: sent_to_gateway.unwrap_or(source.sent_to_gateway),
-            refund_error_message: refund_error_message.or(source.refund_error_message),
-            refund_error_code: refund_error_code.or(source.refund_error_code),
+            refund_error_message: refund_error_message.map_or(source.refund_error_message, |v| v),
+            refund_error_code: refund_error_code.map_or(source.refund_error_code, |v| v),
             refund_arn: refund_arn.or(source.refund_arn),
             metadata: metadata.or(source.metadata),
             refund_reason: refund_reason.or(source.refund_reason),
@@ -781,18 +783,18 @@ impl RefundUpdate {
 pub struct RefundCoreWorkflow {
     pub refund_internal_reference_id: String,
     pub connector_transaction_id: ConnectorTransactionId,
-    pub merchant_id: common_utils::id_type::MerchantId,
-    pub payment_id: common_utils::id_type::PaymentId,
+    pub merchant_id: id_type::MerchantId,
+    pub payment_id: id_type::PaymentId,
     pub processor_transaction_data: Option<String>,
 }
 
 #[cfg(feature = "v2")]
 #[derive(Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct RefundCoreWorkflow {
-    pub refund_id: common_utils::id_type::GlobalRefundId,
+    pub refund_id: id_type::GlobalRefundId,
     pub connector_transaction_id: ConnectorTransactionId,
-    pub merchant_id: common_utils::id_type::MerchantId,
-    pub payment_id: common_utils::id_type::GlobalPaymentId,
+    pub merchant_id: id_type::MerchantId,
+    pub payment_id: id_type::GlobalPaymentId,
     pub processor_transaction_data: Option<String>,
 }
 

@@ -168,9 +168,11 @@ impl ConnectorCommon for Breadpay {
             reason: Some(response.description),
             attempt_status: None,
             connector_transaction_id: None,
+            connector_response_reference_id: None,
             network_advice_code: None,
             network_decline_code: None,
             network_error_message: None,
+            connector_metadata: None,
         })
     }
 }
@@ -787,6 +789,7 @@ impl webhooks::IncomingWebhook for Breadpay {
     fn get_webhook_event_type(
         &self,
         _request: &webhooks::IncomingWebhookRequestDetails<'_>,
+        _context: Option<&webhooks::WebhookContext>,
     ) -> CustomResult<api_models::webhooks::IncomingWebhookEvent, errors::ConnectorError> {
         Err(report!(errors::ConnectorError::WebhooksNotImplemented))
     }
@@ -826,7 +829,8 @@ static BREADPAY_SUPPORTED_PAYMENT_METHODS: LazyLock<SupportedPaymentMethods> =
 static BREADPAY_CONNECTOR_INFO: ConnectorInfo = ConnectorInfo {
     display_name: "Breadpay",
     description: "Breadpay connector",
-    connector_type: enums::PaymentConnectorCategory::PaymentGateway,
+    connector_type: enums::HyperswitchConnectorCategory::PaymentGateway,
+    integration_status: enums::ConnectorIntegrationStatus::Alpha,
 };
 
 static BREADPAY_SUPPORTED_WEBHOOK_FLOWS: [enums::EventClass; 0] = [];

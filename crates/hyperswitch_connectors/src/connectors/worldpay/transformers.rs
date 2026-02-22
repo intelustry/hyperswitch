@@ -141,7 +141,13 @@ fn fetch_payment_instrument(
         PaymentMethodData::Wallet(wallet) => match wallet {
             WalletData::GooglePay(data) => Ok(PaymentInstrument::Googlepay(WalletPayment {
                 payment_type: PaymentType::Encrypted,
-                wallet_token: Secret::new(data.tokenization_data.token),
+                wallet_token: Secret::new(
+                    data.tokenization_data
+                        .get_encrypted_google_pay_token()
+                        .change_context(errors::ConnectorError::MissingRequiredField {
+                            field_name: "gpay wallet_token",
+                        })?,
+                ),
                 ..WalletPayment::default()
             })),
             WalletData::ApplePay(data) => Ok(PaymentInstrument::Applepay(WalletPayment {
@@ -152,6 +158,7 @@ fn fetch_payment_instrument(
             WalletData::AliPayQr(_)
             | WalletData::AliPayRedirect(_)
             | WalletData::AliPayHkRedirect(_)
+            | WalletData::AmazonPay(_)
             | WalletData::AmazonPayRedirect(_)
             | WalletData::Paysera(_)
             | WalletData::Skrill(_)
@@ -198,10 +205,15 @@ fn fetch_payment_instrument(
         | PaymentMethodData::GiftCard(_)
         | PaymentMethodData::OpenBanking(_)
         | PaymentMethodData::CardToken(_)
-        | PaymentMethodData::NetworkToken(_) => Err(errors::ConnectorError::NotImplemented(
-            utils::get_unimplemented_payment_method_error_message("worldpay"),
-        )
-        .into()),
+        | PaymentMethodData::NetworkToken(_)
+        | PaymentMethodData::CardWithLimitedDetails(_)
+        | PaymentMethodData::DecryptedWalletTokenDetailsForNetworkTransactionId(_)
+        | PaymentMethodData::NetworkTokenDetailsForNetworkTransactionId(_) => {
+            Err(errors::ConnectorError::NotImplemented(
+                utils::get_unimplemented_payment_method_error_message("worldpay"),
+            )
+            .into())
+        }
     }
 }
 
@@ -783,6 +795,7 @@ impl<F, T>
                 network_txn_id: network_txn_id.map(|id| id.expose()),
                 connector_response_reference_id: optional_correlation_id.clone(),
                 incremental_authorization_allowed: None,
+                authentication_data: None,
                 charges: None,
             }),
             (Some(reason), _) => Err(ErrorResponse {
@@ -791,10 +804,12 @@ impl<F, T>
                 reason: Some(reason),
                 status_code: router_data.http_code,
                 attempt_status: Some(status),
-                connector_transaction_id: optional_correlation_id,
+                connector_transaction_id: optional_correlation_id.clone(),
+                connector_response_reference_id: optional_correlation_id,
                 network_advice_code: None,
                 network_decline_code: None,
                 network_error_message: None,
+                connector_metadata: None,
             }),
             (_, Some((code, message, advice_code))) => Err(ErrorResponse {
                 code: code.clone(),
@@ -802,12 +817,14 @@ impl<F, T>
                 reason: Some(message.clone()),
                 status_code: router_data.http_code,
                 attempt_status: Some(status),
-                connector_transaction_id: optional_correlation_id,
+                connector_transaction_id: optional_correlation_id.clone(),
+                connector_response_reference_id: optional_correlation_id,
                 network_advice_code: advice_code,
                 // Access Worldpay returns a raw response code in the refusalCode field (if enabled) containing the unmodified response code received either directly from the card scheme for Worldpay-acquired transactions, or from third party acquirers.
                 // You can use raw response codes to inform your retry logic. A rawCode is only returned if specifically requested.
                 network_decline_code: Some(code),
                 network_error_message: Some(message),
+                connector_metadata: None,
             }),
         };
         Ok(Self {
@@ -824,7 +841,10 @@ impl TryFrom<(&types::PaymentsCaptureRouterData, MinorUnit)> for WorldpayPartial
     fn try_from(req: (&types::PaymentsCaptureRouterData, MinorUnit)) -> Result<Self, Self::Error> {
         let (item, amount) = req;
         Ok(Self {
-            reference: item.payment_id.clone().replace("_", "-"),
+            reference: item
+                .connector_request_reference_id
+                .clone()
+                .replace("_", "-"),
             value: PaymentValue {
                 amount: amount.get_amount_as_i64(),
                 currency: item.request.currency,

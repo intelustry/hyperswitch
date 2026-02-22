@@ -1,25 +1,32 @@
 use async_trait::async_trait;
+use common_enums;
 use common_types::payments as common_payments_types;
-use error_stack::ResultExt;
+use hyperswitch_connectors::constants as connector_consts;
+use hyperswitch_domain_models::{
+    payments as domain_payments, router_data,
+    router_data_v2::{flow_common_types, PaymentFlowData},
+    router_flow_types, router_request_types, router_response_types,
+};
+use hyperswitch_interfaces::{
+    api::{self as api_interface, gateway, ConnectorSpecifications},
+    consts as interface_consts,
+};
 use router_env::logger;
-use unified_connector_service_client::payments as payments_grpc;
 
 use super::{ConstructFlowSpecificData, Feature};
 use crate::{
     core::{
-        errors::{ApiErrorResponse, ConnectorErrorExt, RouterResult},
+        errors::{ConnectorErrorExt, RouterResult},
         mandate,
         payments::{
-            self, access_token, customers, helpers, tokenization, transformers, PaymentData,
-        },
-        unified_connector_service::{
-            build_unified_connector_service_auth_metadata,
-            handle_unified_connector_service_response_for_payment_register,
+            self, access_token, customers, gateway as payments_gateway,
+            gateway::context as gateway_context, helpers, session_token, tokenization,
+            transformers, PaymentData,
         },
     },
     routes::SessionState,
     services,
-    types::{self, api, domain, transformers::ForeignTryFrom},
+    types::{self, api, domain},
 };
 
 #[cfg(feature = "v1")]
@@ -35,11 +42,12 @@ impl
         &self,
         state: &SessionState,
         connector_id: &str,
-        merchant_context: &domain::MerchantContext,
-        customer: &Option<domain::Customer>,
+        processor: &domain::Processor,
         merchant_connector_account: &helpers::MerchantConnectorAccountType,
         merchant_recipient_data: Option<types::MerchantRecipientData>,
-        header_payload: Option<hyperswitch_domain_models::payments::HeaderPayload>,
+        header_payload: Option<domain_payments::HeaderPayload>,
+        _payment_method: Option<common_enums::PaymentMethod>,
+        _payment_method_type: Option<common_enums::PaymentMethodType>,
     ) -> RouterResult<types::SetupMandateRouterData> {
         Box::pin(transformers::construct_payment_router_data::<
             api::SetupMandate,
@@ -48,11 +56,12 @@ impl
             state,
             self.clone(),
             connector_id,
-            merchant_context,
-            customer,
+            processor,
             merchant_connector_account,
             merchant_recipient_data,
             header_payload,
+            None,
+            None,
         ))
         .await
     }
@@ -71,18 +80,18 @@ impl
         &self,
         state: &SessionState,
         connector_id: &str,
-        merchant_context: &domain::MerchantContext,
+        processor: &domain::Processor,
         customer: &Option<domain::Customer>,
         merchant_connector_account: &domain::MerchantConnectorAccountTypeDetails,
         merchant_recipient_data: Option<types::MerchantRecipientData>,
-        header_payload: Option<hyperswitch_domain_models::payments::HeaderPayload>,
+        header_payload: Option<domain_payments::HeaderPayload>,
     ) -> RouterResult<types::SetupMandateRouterData> {
         Box::pin(
             transformers::construct_payment_router_data_for_setup_mandate(
                 state,
                 self.clone(),
                 connector_id,
-                merchant_context,
+                processor,
                 customer,
                 merchant_connector_account,
                 merchant_recipient_data,
@@ -102,8 +111,9 @@ impl Feature<api::SetupMandate, types::SetupMandateRequestData> for types::Setup
         call_connector_action: payments::CallConnectorAction,
         connector_request: Option<services::Request>,
         _business_profile: &domain::Profile,
-        _header_payload: hyperswitch_domain_models::payments::HeaderPayload,
+        _header_payload: domain_payments::HeaderPayload,
         _return_raw_connector_response: Option<bool>,
+        gateway_context: gateway_context::RouterGatewayContext,
     ) -> RouterResult<Self> {
         let connector_integration: services::BoxedPaymentConnectorIntegrationInterface<
             api::SetupMandate,
@@ -125,28 +135,161 @@ impl Feature<api::SetupMandate, types::SetupMandateRequestData> for types::Setup
                 }
             }
         }
-        let resp = services::execute_connector_processing_step(
+        let resp = gateway::execute_payment_gateway(
             state,
             connector_integration,
             &self,
             call_connector_action.clone(),
             connector_request,
             None,
+            gateway_context,
         )
         .await
         .to_setup_mandate_failed_response()?;
         Ok(resp)
     }
 
+    async fn balance_check_flow<'a>(
+        &self,
+        state: &SessionState,
+        connector: &api::ConnectorData,
+        _gateway_context: &gateway_context::RouterGatewayContext,
+    ) -> RouterResult<types::BalanceCheckResult> {
+        if connector.connector.is_balance_check_flow_required(
+            api_interface::CurrentFlowInfo::SetupMandate {
+                auth_type: &self.auth_type,
+                request_data: &self.request,
+            },
+        ) {
+            logger::info!(
+                "Balance check flow is required for connector: {}",
+                connector.connector_name
+            );
+            let balance_check_request_data =
+                router_request_types::GiftCardBalanceCheckRequestData::try_from(
+                    self.request.to_owned(),
+                )?;
+            let balance_check_response_data: Result<
+                router_response_types::GiftCardBalanceCheckResponseData,
+                types::ErrorResponse,
+            > = Err(types::ErrorResponse::default());
+            let balance_check_router_data = helpers::router_data_type_conversion::<
+                _,
+                router_flow_types::GiftCardBalanceCheck,
+                _,
+                _,
+                _,
+                _,
+            >(
+                self.clone(),
+                balance_check_request_data,
+                balance_check_response_data,
+            );
+
+            let connector_integration: services::connector_integration_interface::BoxedConnectorIntegrationInterface<
+                router_flow_types::GiftCardBalanceCheck,
+                flow_common_types::GiftCardBalanceCheckFlowData,
+                router_request_types::GiftCardBalanceCheckRequestData,
+                router_response_types::GiftCardBalanceCheckResponseData,
+            > = connector.connector.get_connector_integration();
+
+            let response_router_data = services::execute_connector_processing_step(
+                state,
+                connector_integration,
+                &balance_check_router_data,
+                payments::CallConnectorAction::Trigger,
+                None,
+                None,
+            )
+            .await
+            .to_payment_failed_response()?;
+
+            let balance_check_result = match &response_router_data.response {
+                Ok(router_response_types::GiftCardBalanceCheckResponseData {
+                    balance,
+                    currency,
+                }) => {
+                    logger::info!(
+                        "Requested amount and currency: {}, {}",
+                        self.request.minor_amount,
+                        self.request.currency
+                    );
+                    logger::info!(
+                        "Balance amount and currency recieved from connector : {}, {}",
+                        balance,
+                        currency
+                    );
+                    if *balance >= self.request.minor_amount {
+                        Ok(Some(router_data::PaymentMethodBalance {
+                            amount: *balance,
+                            currency: *currency,
+                        }))
+                    } else {
+                        // If balance is insufficient, return a connector error response
+                        // At this point, connector would have returned a success response with balance details
+                        Err(router_data::ErrorResponse {
+                            code: interface_consts::NO_ERROR_CODE.to_string(),
+                            message: interface_consts::NO_ERROR_MESSAGE.to_string(),
+                            reason: Some(connector_consts::LOW_BALANCE_ERROR_MESSAGE.to_string()),
+                            status_code: response_router_data
+                                .connector_http_status_code
+                                .unwrap_or(200),
+                            attempt_status: Some(common_enums::AttemptStatus::Failure),
+                            connector_transaction_id: None,
+                            connector_response_reference_id: None,
+                            network_advice_code: None,
+                            network_decline_code: None,
+                            network_error_message: None,
+                            connector_metadata: None,
+                        })
+                    }
+                }
+                Err(err) => Err(err.clone()),
+            };
+            Ok(types::BalanceCheckResult {
+                // Continue with the payment only if ok response is recieved from balance check
+                should_continue_payment: balance_check_result.is_ok(),
+                balance_check_result,
+            })
+        } else {
+            Ok(types::BalanceCheckResult {
+                balance_check_result: Ok(None),
+                should_continue_payment: true,
+            })
+        }
+    }
+
     async fn add_access_token<'a>(
         &self,
         state: &SessionState,
         connector: &api::ConnectorData,
-        merchant_context: &domain::MerchantContext,
+        _processor: &domain::Processor,
         creds_identifier: Option<&str>,
+        gateway_context: &gateway_context::RouterGatewayContext,
     ) -> RouterResult<types::AddAccessTokenResult> {
-        access_token::add_access_token(state, connector, merchant_context, self, creds_identifier)
-            .await
+        Box::pin(access_token::add_access_token(
+            state,
+            connector,
+            self,
+            creds_identifier,
+            gateway_context,
+        ))
+        .await
+    }
+
+    async fn add_session_token<'a>(
+        &mut self,
+        state: &SessionState,
+        connector: &api::ConnectorData,
+        gateway_context: &gateway_context::RouterGatewayContext,
+    ) -> RouterResult<()>
+    where
+        Self: Sized,
+    {
+        self.session_token =
+            session_token::add_session_token_if_needed(self, state, connector, gateway_context)
+                .await?;
+        Ok(())
     }
 
     async fn add_payment_method_token<'a>(
@@ -155,29 +298,123 @@ impl Feature<api::SetupMandate, types::SetupMandateRequestData> for types::Setup
         connector: &api::ConnectorData,
         tokenization_action: &payments::TokenizationAction,
         should_continue_payment: bool,
+        gateway_context: &gateway_context::RouterGatewayContext,
     ) -> RouterResult<types::PaymentMethodTokenResult> {
-        let request = self.request.clone();
-        tokenization::add_payment_method_token(
-            state,
-            connector,
-            tokenization_action,
-            self,
-            types::PaymentMethodTokenizationData::try_from(request)?,
-            should_continue_payment,
-        )
-        .await
+        if connector
+            .connector
+            .should_call_tokenization_before_setup_mandate()
+        {
+            let request = self.request.clone();
+            tokenization::add_payment_method_token(
+                state,
+                connector,
+                tokenization_action,
+                self,
+                types::PaymentMethodTokenizationData::try_from(request)?,
+                should_continue_payment,
+                gateway_context,
+            )
+            .await
+        } else {
+            Ok(types::PaymentMethodTokenResult {
+                payment_method_token_result: Ok(None),
+                is_payment_method_tokenization_performed: false,
+                connector_response: None,
+            })
+        }
+    }
+
+    async fn pre_authentication_step<'a>(
+        self,
+        state: &SessionState,
+        connector: &api::ConnectorData,
+        gateway_context: &gateway_context::RouterGatewayContext,
+    ) -> RouterResult<(Self, bool)>
+    where
+        Self: Sized,
+    {
+        if connector.connector.is_pre_authentication_flow_required(
+            api_interface::CurrentFlowInfo::SetupMandate {
+                auth_type: &self.auth_type,
+                request_data: &self.request,
+            },
+        ) {
+            logger::info!(
+                "Pre-authentication flow is required for connector: {}",
+                connector.connector_name
+            );
+            let setup_mandate_request_data = self.request.clone();
+            let pre_authenticate_request_data =
+                types::PaymentsPreAuthenticateData::try_from(self.request.to_owned())?;
+            let pre_authenticate_response_data: Result<
+                types::PaymentsResponseData,
+                types::ErrorResponse,
+            > = Err(types::ErrorResponse::default());
+            let pre_authenticate_router_data =
+                helpers::router_data_type_conversion::<_, api::PreAuthenticate, _, _, _, _>(
+                    self.clone(),
+                    pre_authenticate_request_data,
+                    pre_authenticate_response_data,
+                );
+            let pre_authenticate_router_data = Box::pin(payments_gateway::handle_gateway_call::<
+                _,
+                _,
+                _,
+                PaymentFlowData,
+                _,
+            >(
+                state,
+                pre_authenticate_router_data,
+                connector,
+                gateway_context,
+                payments::CallConnectorAction::Trigger,
+                None,
+                None,
+            ))
+            .await?;
+            let pre_authenticate_response = pre_authenticate_router_data.response.clone();
+            let mut setup_mandate_router_data =
+                helpers::router_data_type_conversion::<_, api::SetupMandate, _, _, _, _>(
+                    pre_authenticate_router_data,
+                    setup_mandate_request_data,
+                    pre_authenticate_response,
+                );
+
+            if let Ok(types::PaymentsResponseData::ThreeDSEnrollmentResponse {
+                enrolled_v2,
+                related_transaction_id,
+            }) = &setup_mandate_router_data.response
+            {
+                let (enrolled_for_3ds, related_transaction_id) =
+                    (*enrolled_v2, related_transaction_id.clone());
+                setup_mandate_router_data.request.enrolled_for_3ds = enrolled_for_3ds;
+                setup_mandate_router_data.request.related_transaction_id = related_transaction_id;
+            }
+
+            let should_continue = setup_mandate_router_data.response.is_ok();
+
+            Ok((setup_mandate_router_data, should_continue))
+        } else {
+            logger::info!(
+                "Pre-authentication flow is not required for connector: {} for Setup Mandate flow",
+                connector.connector_name
+            );
+            Ok((self, true))
+        }
     }
 
     async fn create_connector_customer<'a>(
         &self,
         state: &SessionState,
         connector: &api::ConnectorData,
+        gateway_context: &gateway_context::RouterGatewayContext,
     ) -> RouterResult<Option<String>> {
         customers::create_connector_customer(
             state,
             connector,
             self,
             types::ConnectorCustomerData::try_from(self.request.to_owned())?,
+            gateway_context,
         )
         .await
     }
@@ -205,62 +442,6 @@ impl Feature<api::SetupMandate, types::SetupMandateRequestData> for types::Setup
             }
             _ => Ok((None, true)),
         }
-    }
-
-    async fn call_unified_connector_service<'a>(
-        &mut self,
-        state: &SessionState,
-        #[cfg(feature = "v1")] merchant_connector_account: helpers::MerchantConnectorAccountType,
-        #[cfg(feature = "v2")]
-        merchant_connector_account: domain::MerchantConnectorAccountTypeDetails,
-        merchant_context: &domain::MerchantContext,
-    ) -> RouterResult<()> {
-        let client = state
-            .grpc_client
-            .unified_connector_service_client
-            .clone()
-            .ok_or(ApiErrorResponse::InternalServerError)
-            .attach_printable("Failed to fetch Unified Connector Service client")?;
-
-        let payment_register_request =
-            payments_grpc::PaymentServiceRegisterRequest::foreign_try_from(self)
-                .change_context(ApiErrorResponse::InternalServerError)
-                .attach_printable("Failed to construct Payment Setup Mandate Request")?;
-
-        let connector_auth_metadata = build_unified_connector_service_auth_metadata(
-            merchant_connector_account,
-            merchant_context,
-        )
-        .change_context(ApiErrorResponse::InternalServerError)
-        .attach_printable("Failed to construct request metadata")?;
-
-        let response = client
-            .payment_setup_mandate(
-                payment_register_request,
-                connector_auth_metadata,
-                state.get_grpc_headers(),
-            )
-            .await
-            .change_context(ApiErrorResponse::InternalServerError)
-            .attach_printable("Failed to Setup Mandate payment")?;
-
-        let payment_register_response = response.into_inner();
-
-        let (status, router_data_response) =
-            handle_unified_connector_service_response_for_payment_register(
-                payment_register_response.clone(),
-            )
-            .change_context(ApiErrorResponse::InternalServerError)
-            .attach_printable("Failed to deserialize UCS response")?;
-
-        self.status = status;
-        self.response = router_data_response;
-        // UCS does not return raw connector response for setup mandate right now
-        // self.raw_connector_response = payment_register_response
-        //     .raw_connector_response
-        //     .map(Secret::new);
-
-        Ok(())
     }
 }
 

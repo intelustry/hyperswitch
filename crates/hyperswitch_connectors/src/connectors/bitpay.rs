@@ -154,9 +154,11 @@ impl ConnectorCommon for Bitpay {
             reason: response.message,
             attempt_status: None,
             connector_transaction_id: None,
+            connector_response_reference_id: None,
             network_advice_code: None,
             network_decline_code: None,
             network_error_message: None,
+            connector_metadata: None,
         })
     }
 }
@@ -393,6 +395,7 @@ impl webhooks::IncomingWebhook for Bitpay {
     fn get_webhook_event_type(
         &self,
         request: &webhooks::IncomingWebhookRequestDetails<'_>,
+        _context: Option<&webhooks::WebhookContext>,
     ) -> CustomResult<IncomingWebhookEvent, errors::ConnectorError> {
         let notif: BitpayWebhookDetails = request
             .body
@@ -446,7 +449,8 @@ static BITPAY_CONNECTOR_INFO: ConnectorInfo = ConnectorInfo {
         display_name: "Bitpay",
         description:
             "BitPay is a cryptocurrency payment processor that enables businesses to accept Bitcoin and other digital currencies ",
-        connector_type: enums::PaymentConnectorCategory::AlternativePaymentMethod,
+        connector_type: enums::HyperswitchConnectorCategory::AlternativePaymentMethod,
+        integration_status: enums::ConnectorIntegrationStatus::Sandbox,
     };
 
 static BITPAY_SUPPORTED_WEBHOOK_FLOWS: [enums::EventClass; 1] = [enums::EventClass::Payments];

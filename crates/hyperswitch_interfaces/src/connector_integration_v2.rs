@@ -9,7 +9,7 @@ use masking::Maskable;
 use serde_json::json;
 
 use crate::{
-    api::{self, CaptureSyncMethod},
+    api::{self, subscriptions_v2, CaptureSyncMethod},
     errors,
     events::connector_api_logs::ConnectorEvent,
     metrics, types, webhooks,
@@ -22,6 +22,8 @@ pub trait ConnectorV2:
     + api::payments_v2::PaymentV2
     + api::ConnectorRedirectResponse
     + webhooks::IncomingWebhook
+    + api::merchant_connector_webhook_management_v2::ConfigureConnectorWebhookV2
+    + api::ConnectorAuthenticationTokenV2
     + api::ConnectorAccessTokenV2
     + api::disputes_v2::DisputeV2
     + api::files_v2::FileUploadV2
@@ -34,6 +36,7 @@ pub trait ConnectorV2:
     + api::UnifiedAuthenticationServiceV2
     + api::revenue_recovery_v2::RevenueRecoveryV2
     + api::ExternalVaultV2
+    + subscriptions_v2::SubscriptionsV2
 {
 }
 impl<
@@ -42,6 +45,8 @@ impl<
             + api::ConnectorRedirectResponse
             + Send
             + webhooks::IncomingWebhook
+            + api::merchant_connector_webhook_management_v2::ConfigureConnectorWebhookV2
+            + api::ConnectorAuthenticationTokenV2
             + api::ConnectorAccessTokenV2
             + api::disputes_v2::DisputeV2
             + api::files_v2::FileUploadV2
@@ -53,13 +58,16 @@ impl<
             + api::authentication_v2::ExternalAuthenticationV2
             + api::UnifiedAuthenticationServiceV2
             + api::revenue_recovery_v2::RevenueRecoveryV2
-            + api::ExternalVaultV2,
+            + api::ExternalVaultV2
+            + subscriptions_v2::SubscriptionsV2,
     > ConnectorV2 for T
 {
 }
 
 /// Alias for Box<&'static (dyn ConnectorV2 + Sync)>
 pub type BoxedConnectorV2 = Box<&'static (dyn ConnectorV2 + Sync)>;
+
+impl api::ConnectorAccessTokenSuffix for BoxedConnectorV2 {}
 
 /// alias for Box of a type that implements trait ConnectorIntegrationV2
 pub type BoxedConnectorIntegrationV2<'a, Flow, ResourceCommonData, Req, Resp> =
@@ -208,9 +216,11 @@ pub trait ConnectorIntegrationV2<Flow, ResourceCommonData, Req, Resp>:
             status_code: res.status_code,
             attempt_status: None,
             connector_transaction_id: None,
+            connector_response_reference_id: None,
             network_advice_code: None,
             network_decline_code: None,
             network_error_message: None,
+            connector_metadata: None,
         })
     }
 

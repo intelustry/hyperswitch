@@ -150,7 +150,7 @@ impl
                     }),
                     None,
                 ),
-                UpiData::UpiIntent(_) => (
+                UpiData::UpiIntent(_) | UpiData::UpiQr(_) => (
                     common_enums::CountryAlpha2::IN,
                     None,
                     Some(PreferredCheckoutMethod::Qr),
@@ -177,7 +177,8 @@ impl
                 | BankRedirectData::Sofort { .. }
                 | BankRedirectData::Trustly { .. }
                 | BankRedirectData::OnlineBankingFpx { .. }
-                | BankRedirectData::OnlineBankingThailand { .. } => {
+                | BankRedirectData::OnlineBankingThailand { .. }
+                | BankRedirectData::OpenBanking { .. } => {
                     Err(errors::ConnectorError::NotImplemented(
                         get_unimplemented_payment_method_error_message("iatapay"),
                     ))?
@@ -193,6 +194,9 @@ impl
                         (common_enums::CountryAlpha2::TH, None, None)
                     }
                     RealTimePaymentData::VietQr {} => (common_enums::CountryAlpha2::VN, None, None),
+                    RealTimePaymentData::Qris {} => Err(errors::ConnectorError::NotImplemented(
+                        get_unimplemented_payment_method_error_message("iatapay"),
+                    ))?,
                 }
             }
             PaymentMethodData::Card(_)
@@ -210,7 +214,10 @@ impl
             | PaymentMethodData::CardToken(_)
             | PaymentMethodData::OpenBanking(_)
             | PaymentMethodData::NetworkToken(_)
-            | PaymentMethodData::CardDetailsForNetworkTransactionId(_) => {
+            | PaymentMethodData::CardDetailsForNetworkTransactionId(_)
+            | PaymentMethodData::CardWithLimitedDetails(_)
+            | PaymentMethodData::DecryptedWalletTokenDetailsForNetworkTransactionId(_)
+            | PaymentMethodData::NetworkTokenDetailsForNetworkTransactionId(_) => {
                 Err(errors::ConnectorError::NotImplemented(
                     get_unimplemented_payment_method_error_message("iatapay"),
                 ))?
@@ -343,9 +350,11 @@ fn get_iatpay_response(
             status_code,
             attempt_status: Some(status),
             connector_transaction_id: response.iata_payment_id.clone(),
+            connector_response_reference_id: None,
             network_advice_code: None,
             network_decline_code: None,
             network_error_message: None,
+            connector_metadata: None,
         })
     } else {
         None
@@ -393,6 +402,7 @@ fn get_iatpay_response(
                 network_txn_id: None,
                 connector_response_reference_id: connector_response_reference_id.clone(),
                 incremental_authorization_allowed: None,
+                authentication_data: None,
                 charges: None,
             }
         }
@@ -404,6 +414,7 @@ fn get_iatpay_response(
             network_txn_id: None,
             connector_response_reference_id: connector_response_reference_id.clone(),
             incremental_authorization_allowed: None,
+            authentication_data: None,
             charges: None,
         },
     };
@@ -530,9 +541,11 @@ impl TryFrom<RefundsResponseRouterData<Execute, RefundResponse>> for RefundsRout
                 status_code: item.http_code,
                 attempt_status: None,
                 connector_transaction_id: Some(item.response.iata_refund_id.clone()),
+                connector_response_reference_id: None,
                 network_advice_code: None,
                 network_decline_code: None,
                 network_error_message: None,
+                connector_metadata: None,
             })
         } else {
             Ok(RefundsResponseData {
@@ -569,9 +582,11 @@ impl TryFrom<RefundsResponseRouterData<RSync, RefundResponse>> for RefundsRouter
                 status_code: item.http_code,
                 attempt_status: None,
                 connector_transaction_id: Some(item.response.iata_refund_id.clone()),
+                connector_response_reference_id: None,
                 network_advice_code: None,
                 network_decline_code: None,
                 network_error_message: None,
+                connector_metadata: None,
             })
         } else {
             Ok(RefundsResponseData {

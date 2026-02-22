@@ -168,9 +168,11 @@ impl ConnectorCommon for Jpmorgan {
             reason: Some(response_message),
             attempt_status: None,
             connector_transaction_id: None,
+            connector_response_reference_id: None,
             network_advice_code: None,
             network_decline_code: None,
             network_error_message: None,
+            connector_metadata: None,
         })
     }
 }
@@ -812,6 +814,7 @@ impl webhooks::IncomingWebhook for Jpmorgan {
     fn get_webhook_event_type(
         &self,
         _request: &webhooks::IncomingWebhookRequestDetails<'_>,
+        _context: Option<&webhooks::WebhookContext>,
     ) -> CustomResult<api_models::webhooks::IncomingWebhookEvent, errors::ConnectorError> {
         Err(report!(errors::ConnectorError::WebhooksNotImplemented))
     }
@@ -887,7 +890,8 @@ static JPMORGAN_CONNECTOR_INFO: ConnectorInfo = ConnectorInfo {
         display_name: "Jpmorgan",
         description:
             "J.P. Morgan is a global financial services firm and investment bank, offering banking, asset management, and payment processing solutions",
-        connector_type: enums::PaymentConnectorCategory::BankAcquirer,
+        connector_type: enums::HyperswitchConnectorCategory::BankAcquirer,
+        integration_status: enums::ConnectorIntegrationStatus::Beta,
     };
 
 static JPMORGAN_SUPPORTED_WEBHOOK_FLOWS: [enums::EventClass; 0] = [];

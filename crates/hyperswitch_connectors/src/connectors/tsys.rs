@@ -634,6 +634,7 @@ impl webhooks::IncomingWebhook for Tsys {
     fn get_webhook_event_type(
         &self,
         _request: &webhooks::IncomingWebhookRequestDetails<'_>,
+        _context: Option<&webhooks::WebhookContext>,
     ) -> CustomResult<api_models::webhooks::IncomingWebhookEvent, errors::ConnectorError> {
         Err(report!(errors::ConnectorError::WebhooksNotImplemented))
     }
@@ -708,7 +709,8 @@ static TSYS_SUPPORTED_PAYMENT_METHODS: LazyLock<SupportedPaymentMethods> = LazyL
 static TSYS_CONNECTOR_INFO: ConnectorInfo = ConnectorInfo {
     display_name: "Tsys",
     description: "TSYS, a Global Payments company, is the payment stack for the future, powered by unmatched expertise.",
-    connector_type: enums::PaymentConnectorCategory::BankAcquirer,
+    connector_type: enums::HyperswitchConnectorCategory::BankAcquirer,
+    integration_status: enums::ConnectorIntegrationStatus::Beta,
 };
 
 static TSYS_SUPPORTED_WEBHOOK_FLOWS: [enums::EventClass; 0] = [];

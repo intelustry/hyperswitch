@@ -129,6 +129,7 @@ impl<F, T> TryFrom<ResponseRouterData<F, PaystackPaymentsResponse, T, PaymentsRe
                         network_txn_id: None,
                         connector_response_reference_id: None,
                         incremental_authorization_allowed: None,
+                        authentication_data: None,
                         charges: None,
                     }),
                 )
@@ -143,10 +144,12 @@ impl<F, T> TryFrom<ResponseRouterData<F, PaystackPaymentsResponse, T, PaymentsRe
                         reason: Some(err_msg.clone()),
                         attempt_status: None,
                         connector_transaction_id: None,
+                        connector_response_reference_id: None,
                         status_code: item.http_code,
                         network_advice_code: None,
                         network_decline_code: None,
                         network_error_message: None,
+                        connector_metadata: None,
                     }),
                 )
             }
@@ -226,6 +229,7 @@ impl<F, T> TryFrom<ResponseRouterData<F, PaystackPSyncResponse, T, PaymentsRespo
                     network_txn_id: None,
                     connector_response_reference_id: None,
                     incremental_authorization_allowed: None,
+                    authentication_data: None,
                     charges: None,
                 }),
                 ..item.data
@@ -240,6 +244,7 @@ impl<F, T> TryFrom<ResponseRouterData<F, PaystackPSyncResponse, T, PaymentsRespo
                     network_txn_id: None,
                     connector_response_reference_id: None,
                     incremental_authorization_allowed: None,
+                    authentication_data: None,
                     charges: None,
                 }),
                 ..item.data
@@ -253,10 +258,12 @@ impl<F, T> TryFrom<ResponseRouterData<F, PaystackPSyncResponse, T, PaymentsRespo
                         reason: Some(err_msg.clone()),
                         attempt_status: None,
                         connector_transaction_id: None,
+                        connector_response_reference_id: None,
                         status_code: item.http_code,
                         network_advice_code: None,
                         network_decline_code: None,
                         network_error_message: None,
+                        connector_metadata: None,
                     }),
                     ..item.data
                 })
@@ -353,10 +360,12 @@ impl TryFrom<RefundsResponseRouterData<Execute, PaystackRefundsResponse>>
                         reason: Some(err_msg.clone()),
                         attempt_status: None,
                         connector_transaction_id: None,
+                        connector_response_reference_id: None,
                         status_code: item.http_code,
                         network_advice_code: None,
                         network_decline_code: None,
                         network_error_message: None,
+                        connector_metadata: None,
                     }),
                     ..item.data
                 })
@@ -396,10 +405,12 @@ impl TryFrom<RefundsResponseRouterData<RSync, PaystackRefundsResponse>>
                         reason: Some(err_msg.clone()),
                         attempt_status: None,
                         connector_transaction_id: None,
+                        connector_response_reference_id: None,
                         status_code: item.http_code,
                         network_advice_code: None,
                         network_decline_code: None,
                         network_error_message: None,
+                        connector_metadata: None,
                     }),
                     ..item.data
                 })

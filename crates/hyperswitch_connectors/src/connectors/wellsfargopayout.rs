@@ -19,7 +19,9 @@ use hyperswitch_domain_models::{
         PaymentsCancelData, PaymentsCaptureData, PaymentsSessionData, PaymentsSyncData,
         RefundsData, SetupMandateRequestData,
     },
-    router_response_types::{PaymentsResponseData, RefundsResponseData},
+    router_response_types::{
+        ConnectorInfo, PaymentsResponseData, RefundsResponseData, SupportedPaymentMethods,
+    },
     types::{
         PaymentsAuthorizeRouterData, PaymentsCaptureRouterData, PaymentsSyncRouterData,
         RefundSyncRouterData, RefundsRouterData,
@@ -37,7 +39,7 @@ use hyperswitch_interfaces::{
         PaymentsAuthorizeType, PaymentsCaptureType, PaymentsSyncType, RefundExecuteType,
         RefundSyncType, Response,
     },
-    webhooks::{IncomingWebhook, IncomingWebhookRequestDetails},
+    webhooks::{IncomingWebhook, IncomingWebhookRequestDetails, WebhookContext},
 };
 use masking::{ExposeInterface, Mask as _, Maskable};
 
@@ -148,9 +150,11 @@ impl ConnectorCommon for Wellsfargopayout {
             reason: response.reason,
             attempt_status: None,
             connector_transaction_id: None,
+            connector_response_reference_id: None,
             network_advice_code: None,
             network_decline_code: None,
             network_error_message: None,
+            connector_metadata: None,
         })
     }
 }
@@ -560,6 +564,7 @@ impl IncomingWebhook for Wellsfargopayout {
     fn get_webhook_event_type(
         &self,
         _request: &IncomingWebhookRequestDetails<'_>,
+        _context: Option<&WebhookContext>,
     ) -> CustomResult<IncomingWebhookEvent, ConnectorError> {
         Err(report!(ConnectorError::WebhooksNotImplemented))
     }
@@ -572,4 +577,23 @@ impl IncomingWebhook for Wellsfargopayout {
     }
 }
 
-impl ConnectorSpecifications for Wellsfargopayout {}
+static WELLSFARGOPAYOUTS_CONNECTOR_INFO: ConnectorInfo = ConnectorInfo {
+    display_name: "Wellsfargo Payout",
+    description: "Wells Fargo Payouts streamlines secure domestic and international payments for businesses via online banking, supporting Bill Pay, Digital Wires, and Zelle",
+    connector_type: common_enums::HyperswitchConnectorCategory::PayoutProcessor,
+    integration_status: common_enums::ConnectorIntegrationStatus::Sandbox,
+};
+
+impl ConnectorSpecifications for Wellsfargopayout {
+    fn get_connector_about(&self) -> Option<&'static ConnectorInfo> {
+        Some(&WELLSFARGOPAYOUTS_CONNECTOR_INFO)
+    }
+
+    fn get_supported_payment_methods(&self) -> Option<&'static SupportedPaymentMethods> {
+        None
+    }
+
+    fn get_supported_webhook_flows(&self) -> Option<&'static [common_enums::enums::EventClass]> {
+        None
+    }
+}

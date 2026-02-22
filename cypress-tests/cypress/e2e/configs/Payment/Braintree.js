@@ -47,6 +47,7 @@ const paymentMethodDataNo3DSResponse = {
     card_holder_name: "Juspay Hyperswitch",
     payment_checks: null,
     authentication_data: null,
+    auth_code: null,
   },
   billing: null,
 };
@@ -65,6 +66,7 @@ const paymentMethodData3DSResponse = {
     card_holder_name: "Juspay Hyperswitch",
     payment_checks: null,
     authentication_data: null,
+    auth_code: null,
   },
   billing: null,
 };
@@ -85,6 +87,21 @@ export const connectorDetails = {
         currency: "USD",
         customer_acceptance: null,
         setup_future_usage: "on_session",
+      },
+      Response: {
+        status: 200,
+        body: {
+          status: "requires_payment_method",
+        },
+      },
+    },
+    PaymentIntentOffSession: {
+      Request: {
+        amount: 6000,
+        authentication_type: "no_three_ds",
+        currency: "USD",
+        customer_acceptance: null,
+        setup_future_usage: "off_session",
       },
       Response: {
         status: 200,
@@ -458,6 +475,8 @@ export const connectorDetails = {
         payment_method_data: {
           card: successfulNo3DSCardDetails,
         },
+        mandate_data: null,
+        customer_acceptance: customerAcceptance,
       },
       Response: {
         status: 501,

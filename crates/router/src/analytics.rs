@@ -99,6 +99,10 @@ pub mod routes {
                                 .route(web::post().to(generate_merchant_payment_report)),
                         )
                         .service(
+                            web::resource("report/payouts")
+                                .route(web::post().to(generate_merchant_payout_report)),
+                        )
+                        .service(
                             web::resource("report/authentications")
                                 .route(web::post().to(generate_merchant_authentication_report)),
                         )
@@ -227,6 +231,10 @@ pub mod routes {
                                         .route(web::post().to(generate_merchant_payment_report)),
                                 )
                                 .service(
+                                    web::resource("report/payouts")
+                                        .route(web::post().to(generate_merchant_payout_report)),
+                                )
+                                .service(
                                     web::resource("report/authentications").route(
                                         web::post().to(generate_merchant_authentication_report),
                                     ),
@@ -314,6 +322,10 @@ pub mod routes {
                                         .route(web::post().to(generate_org_payment_report)),
                                 )
                                 .service(
+                                    web::resource("report/payouts")
+                                        .route(web::post().to(generate_org_payout_report)),
+                                )
+                                .service(
                                     web::resource("report/authentications")
                                         .route(web::post().to(generate_org_authentication_report)),
                                 )
@@ -394,6 +406,10 @@ pub mod routes {
                                 .service(
                                     web::resource("report/payments")
                                         .route(web::post().to(generate_profile_payment_report)),
+                                )
+                                .service(
+                                    web::resource("report/payouts")
+                                        .route(web::post().to(generate_profile_payout_report)),
                                 )
                                 .service(
                                     web::resource("report/authentications").route(
@@ -499,8 +515,8 @@ pub mod routes {
             &req,
             payload,
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let auth: AuthInfo = AuthInfo::MerchantLevel {
                     org_id: org_id.clone(),
                     merchant_ids: vec![merchant_id.clone()],
@@ -520,6 +536,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::MerchantAnalyticsRead,
+                allow_connected: false,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -549,7 +567,7 @@ pub mod routes {
             &req,
             payload,
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
                 let auth: AuthInfo = AuthInfo::OrgLevel {
                     org_id: org_id.clone(),
                 };
@@ -574,6 +592,8 @@ pub mod routes {
                 },
                 &auth::JWTAuth {
                     permission: Permission::OrganizationAnalyticsRead,
+                    allow_connected: false,
+                    allow_platform: false,
                 },
                 req.headers(),
             ),
@@ -605,12 +625,14 @@ pub mod routes {
             &req,
             payload,
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let profile_id = auth
-                    .profile_id
+                    .profile
                     .ok_or(report!(UserErrors::JwtProfileIdMissing))
-                    .change_context(AnalyticsError::AccessForbiddenError)?;
+                    .change_context(AnalyticsError::AccessForbiddenError)?
+                    .get_id()
+                    .clone();
                 let auth: AuthInfo = AuthInfo::ProfileLevel {
                     org_id: org_id.clone(),
                     merchant_id: merchant_id.clone(),
@@ -632,6 +654,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::ProfileAnalyticsRead,
+                allow_connected: false,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -660,8 +684,8 @@ pub mod routes {
             &req,
             payload,
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let auth: AuthInfo = AuthInfo::MerchantLevel {
                     org_id: org_id.clone(),
                     merchant_ids: vec![merchant_id.clone()],
@@ -682,6 +706,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::MerchantAnalyticsRead,
+                allow_connected: false,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -711,7 +737,7 @@ pub mod routes {
             &req,
             payload,
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
                 let auth: AuthInfo = AuthInfo::OrgLevel {
                     org_id: org_id.clone(),
                 };
@@ -736,6 +762,8 @@ pub mod routes {
                 },
                 &auth::JWTAuth {
                     permission: Permission::OrganizationAnalyticsRead,
+                    allow_connected: false,
+                    allow_platform: false,
                 },
                 req.headers(),
             ),
@@ -767,12 +795,14 @@ pub mod routes {
             &req,
             payload,
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let profile_id = auth
-                    .profile_id
+                    .profile
                     .ok_or(report!(UserErrors::JwtProfileIdMissing))
-                    .change_context(AnalyticsError::AccessForbiddenError)?;
+                    .change_context(AnalyticsError::AccessForbiddenError)?
+                    .get_id()
+                    .clone();
                 let auth: AuthInfo = AuthInfo::ProfileLevel {
                     org_id: org_id.clone(),
                     merchant_id: merchant_id.clone(),
@@ -794,6 +824,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::ProfileAnalyticsRead,
+                allow_connected: false,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -822,8 +854,8 @@ pub mod routes {
             &req,
             payload,
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let auth: AuthInfo = AuthInfo::MerchantLevel {
                     org_id: org_id.clone(),
                     merchant_ids: vec![merchant_id.clone()],
@@ -844,6 +876,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::MerchantAnalyticsRead,
+                allow_connected: false,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -873,7 +907,7 @@ pub mod routes {
             &req,
             payload,
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
                 let auth: AuthInfo = AuthInfo::OrgLevel {
                     org_id: org_id.clone(),
                 };
@@ -898,6 +932,8 @@ pub mod routes {
                 },
                 &auth::JWTAuth {
                     permission: Permission::OrganizationAnalyticsRead,
+                    allow_connected: false,
+                    allow_platform: false,
                 },
                 req.headers(),
             ),
@@ -929,12 +965,14 @@ pub mod routes {
             &req,
             payload,
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let profile_id = auth
-                    .profile_id
+                    .profile
                     .ok_or(report!(UserErrors::JwtProfileIdMissing))
-                    .change_context(AnalyticsError::AccessForbiddenError)?;
+                    .change_context(AnalyticsError::AccessForbiddenError)?
+                    .get_id()
+                    .clone();
                 let auth: AuthInfo = AuthInfo::ProfileLevel {
                     org_id: org_id.clone(),
                     merchant_id: merchant_id.clone(),
@@ -956,6 +994,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::ProfileAnalyticsRead,
+                allow_connected: false,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -984,12 +1024,18 @@ pub mod routes {
             &req,
             payload,
             |state, auth: AuthenticationData, req, _| async move {
-                analytics::frm::get_metrics(&state.pool, auth.merchant_account.get_id(), req)
-                    .await
-                    .map(ApplicationResponse::Json)
+                analytics::frm::get_metrics(
+                    &state.pool,
+                    auth.platform.get_processor().get_account().get_id(),
+                    req,
+                )
+                .await
+                .map(ApplicationResponse::Json)
             },
             &auth::JWTAuth {
                 permission: Permission::MerchantAnalyticsRead,
+                allow_connected: false,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -1021,7 +1067,7 @@ pub mod routes {
             |state, auth: AuthenticationData, req, _| async move {
                 analytics::sdk_events::get_metrics(
                     &state.pool,
-                    &auth.merchant_account.publishable_key,
+                    &auth.platform.get_processor().get_account().publishable_key,
                     req,
                 )
                 .await
@@ -1029,6 +1075,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::MerchantAnalyticsRead,
+                allow_connected: true,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -1060,8 +1108,8 @@ pub mod routes {
             |state, auth: AuthenticationData, req, _| async move {
                 analytics::active_payments::get_metrics(
                     &state.pool,
-                    &auth.merchant_account.publishable_key,
-                    auth.merchant_account.get_id(),
+                    &auth.platform.get_processor().get_account().publishable_key,
+                    auth.platform.get_processor().get_account().get_id(),
                     req,
                 )
                 .await
@@ -1069,6 +1117,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::MerchantAnalyticsRead,
+                allow_connected: false,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -1098,8 +1148,8 @@ pub mod routes {
             &req,
             payload,
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let auth: AuthInfo = AuthInfo::MerchantLevel {
                     org_id: org_id.clone(),
                     merchant_ids: vec![merchant_id.clone()],
@@ -1111,6 +1161,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::MerchantAnalyticsRead,
+                allow_connected: false,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -1140,12 +1192,14 @@ pub mod routes {
             &req,
             payload,
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let profile_id = auth
-                    .profile_id
+                    .profile
                     .ok_or(report!(UserErrors::JwtProfileIdMissing))
-                    .change_context(AnalyticsError::AccessForbiddenError)?;
+                    .change_context(AnalyticsError::AccessForbiddenError)?
+                    .get_id()
+                    .clone();
                 let auth: AuthInfo = AuthInfo::ProfileLevel {
                     org_id: org_id.clone(),
                     merchant_id: merchant_id.clone(),
@@ -1157,6 +1211,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::ProfileAnalyticsRead,
+                allow_connected: false,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -1186,7 +1242,7 @@ pub mod routes {
             &req,
             payload,
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
                 let auth: AuthInfo = AuthInfo::OrgLevel {
                     org_id: org_id.clone(),
                 };
@@ -1201,6 +1257,8 @@ pub mod routes {
                 },
                 &auth::JWTAuth {
                     permission: Permission::OrganizationAnalyticsRead,
+                    allow_connected: false,
+                    allow_platform: false,
                 },
                 req.headers(),
             ),
@@ -1221,8 +1279,8 @@ pub mod routes {
             &req,
             json_payload.into_inner(),
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let auth: AuthInfo = AuthInfo::MerchantLevel {
                     org_id: org_id.clone(),
                     merchant_ids: vec![merchant_id.clone()],
@@ -1233,6 +1291,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::MerchantAnalyticsRead,
+                allow_connected: true,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -1251,8 +1311,8 @@ pub mod routes {
             &req,
             json_payload.into_inner(),
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
 
                 let auth: AuthInfo = AuthInfo::MerchantLevel {
                     org_id: org_id.clone(),
@@ -1264,6 +1324,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::MerchantAnalyticsRead,
+                allow_connected: false,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -1283,7 +1345,7 @@ pub mod routes {
             &req,
             json_payload.into_inner(),
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
                 let auth: AuthInfo = AuthInfo::OrgLevel {
                     org_id: org_id.clone(),
                 };
@@ -1299,6 +1361,8 @@ pub mod routes {
                 },
                 &auth::JWTAuth {
                     permission: Permission::OrganizationAnalyticsRead,
+                    allow_connected: false,
+                    allow_platform: false,
                 },
                 req.headers(),
             ),
@@ -1320,13 +1384,14 @@ pub mod routes {
             &req,
             json_payload.into_inner(),
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let profile_id = auth
-                    .profile_id
+                    .profile
                     .ok_or(report!(UserErrors::JwtProfileIdMissing))
-                    .change_context(AnalyticsError::AccessForbiddenError)?;
-
+                    .change_context(AnalyticsError::AccessForbiddenError)?
+                    .get_id()
+                    .clone();
                 let auth: AuthInfo = AuthInfo::ProfileLevel {
                     org_id: org_id.clone(),
                     merchant_id: merchant_id.clone(),
@@ -1338,6 +1403,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::ProfileAnalyticsRead,
+                allow_connected: false,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -1357,7 +1424,7 @@ pub mod routes {
             &req,
             json_payload.into_inner(),
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
                 let auth: AuthInfo = AuthInfo::OrgLevel {
                     org_id: org_id.clone(),
                 };
@@ -1372,6 +1439,8 @@ pub mod routes {
                 },
                 &auth::JWTAuth {
                     permission: Permission::OrganizationAnalyticsRead,
+                    allow_connected: true,
+                    allow_platform: false,
                 },
                 req.headers(),
             ),
@@ -1393,12 +1462,14 @@ pub mod routes {
             &req,
             json_payload.into_inner(),
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let profile_id = auth
-                    .profile_id
+                    .profile
                     .ok_or(report!(UserErrors::JwtProfileIdMissing))
-                    .change_context(AnalyticsError::AccessForbiddenError)?;
+                    .change_context(AnalyticsError::AccessForbiddenError)?
+                    .get_id()
+                    .clone();
                 let auth: AuthInfo = AuthInfo::ProfileLevel {
                     org_id: org_id.clone(),
                     merchant_id: merchant_id.clone(),
@@ -1410,6 +1481,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::ProfileAnalyticsRead,
+                allow_connected: true,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -1432,7 +1505,7 @@ pub mod routes {
                 analytics::payment_intents::get_filters(
                     &state.pool,
                     req,
-                    auth.merchant_account.get_id(),
+                    auth.platform.get_processor().get_account().get_id(),
                 )
                 .await
                 .map(ApplicationResponse::Json)
@@ -1444,6 +1517,8 @@ pub mod routes {
                 },
                 &auth::JWTAuth {
                     permission: Permission::MerchantAnalyticsRead,
+                    allow_connected: false,
+                    allow_platform: false,
                 },
                 req.headers(),
             ),
@@ -1464,8 +1539,8 @@ pub mod routes {
             &req,
             json_payload.into_inner(),
             |state, auth: AuthenticationData, req: GetRefundFilterRequest, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let auth: AuthInfo = AuthInfo::MerchantLevel {
                     org_id: org_id.clone(),
                     merchant_ids: vec![merchant_id.clone()],
@@ -1476,6 +1551,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::MerchantAnalyticsRead,
+                allow_connected: false,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -1495,7 +1572,7 @@ pub mod routes {
             &req,
             json_payload.into_inner(),
             |state, auth: AuthenticationData, req: GetRefundFilterRequest, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
                 let auth: AuthInfo = AuthInfo::OrgLevel {
                     org_id: org_id.clone(),
                 };
@@ -1510,6 +1587,8 @@ pub mod routes {
                 },
                 &auth::JWTAuth {
                     permission: Permission::OrganizationAnalyticsRead,
+                    allow_connected: false,
+                    allow_platform: false,
                 },
                 req.headers(),
             ),
@@ -1531,12 +1610,14 @@ pub mod routes {
             &req,
             json_payload.into_inner(),
             |state, auth: AuthenticationData, req: GetRefundFilterRequest, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let profile_id = auth
-                    .profile_id
+                    .profile
                     .ok_or(report!(UserErrors::JwtProfileIdMissing))
-                    .change_context(AnalyticsError::AccessForbiddenError)?;
+                    .change_context(AnalyticsError::AccessForbiddenError)?
+                    .get_id()
+                    .clone();
                 let auth: AuthInfo = AuthInfo::ProfileLevel {
                     org_id: org_id.clone(),
                     merchant_id: merchant_id.clone(),
@@ -1548,6 +1629,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::ProfileAnalyticsRead,
+                allow_connected: false,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -1566,12 +1649,18 @@ pub mod routes {
             &req,
             json_payload.into_inner(),
             |state, auth: AuthenticationData, req: GetFrmFilterRequest, _| async move {
-                analytics::frm::get_filters(&state.pool, req, auth.merchant_account.get_id())
-                    .await
-                    .map(ApplicationResponse::Json)
+                analytics::frm::get_filters(
+                    &state.pool,
+                    req,
+                    auth.platform.get_processor().get_account().get_id(),
+                )
+                .await
+                .map(ApplicationResponse::Json)
             },
             &auth::JWTAuth {
                 permission: Permission::MerchantAnalyticsRead,
+                allow_connected: false,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -1594,13 +1683,15 @@ pub mod routes {
                 analytics::sdk_events::get_filters(
                     &state.pool,
                     req,
-                    &auth.merchant_account.publishable_key,
+                    &auth.platform.get_processor().get_account().publishable_key,
                 )
                 .await
                 .map(ApplicationResponse::Json)
             },
             &auth::JWTAuth {
                 permission: Permission::MerchantAnalyticsRead,
+                allow_connected: true,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -1619,20 +1710,37 @@ pub mod routes {
             &req,
             json_payload.into_inner(),
             |state, auth: AuthenticationData, req, _| async move {
-                let payment_id = match req.query_param.clone() {
-                    QueryType::Payment { payment_id } => payment_id,
-                    QueryType::Refund { payment_id, .. } => payment_id,
-                    QueryType::Dispute { payment_id, .. } => payment_id,
+                let (payment_id, payout_id) = match req.query_param.clone() {
+                    QueryType::Payment { payment_id } => (Some(payment_id), None),
+                    QueryType::Refund { payment_id, .. } => (Some(payment_id), None),
+                    QueryType::Dispute { payment_id, .. } => (Some(payment_id), None),
+                    QueryType::Payout { payout_id } => (None, Some(payout_id)),
                 };
-                utils::check_if_profile_id_is_present_in_payment_intent(payment_id, &state, &auth)
-                    .await
-                    .change_context(AnalyticsError::AccessForbiddenError)?;
-                api_events_core(&state.pool, req, auth.merchant_account.get_id())
-                    .await
-                    .map(ApplicationResponse::Json)
+                #[cfg(feature = "v1")]
+                let profile_id = auth.profile.map(|profile| profile.get_id().clone());
+                #[cfg(feature = "v2")]
+                let profile_id = Some(auth.profile.get_id().clone());
+                utils::check_if_profile_id_is_present_in_intent_table(
+                    payment_id,
+                    payout_id,
+                    &state,
+                    auth.platform.get_processor(),
+                    profile_id,
+                )
+                .await
+                .change_context(AnalyticsError::AccessForbiddenError)?;
+                api_events_core(
+                    &state.pool,
+                    req,
+                    auth.platform.get_processor().get_account().get_id(),
+                )
+                .await
+                .map(ApplicationResponse::Json)
             },
             &auth::JWTAuth {
                 permission: Permission::ProfileAnalyticsRead,
+                allow_connected: true,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -1653,19 +1761,31 @@ pub mod routes {
             &req,
             json_payload.into_inner(),
             |state, auth: AuthenticationData, req, _| async move {
-                utils::check_if_profile_id_is_present_in_payment_intent(
+                #[cfg(feature = "v1")]
+                let profile_id = auth.profile.map(|profile| profile.get_id().clone());
+                #[cfg(feature = "v2")]
+                let profile_id = Some(auth.profile.get_id().clone());
+                utils::check_if_profile_id_is_present_in_intent_table(
                     req.payment_id.clone(),
+                    req.payout_id.clone(),
                     &state,
-                    &auth,
+                    auth.platform.get_processor(),
+                    profile_id,
                 )
                 .await
                 .change_context(AnalyticsError::AccessForbiddenError)?;
-                outgoing_webhook_events_core(&state.pool, req, auth.merchant_account.get_id())
-                    .await
-                    .map(ApplicationResponse::Json)
+                outgoing_webhook_events_core(
+                    &state.pool,
+                    req,
+                    auth.platform.get_processor().get_account().get_id(),
+                )
+                .await
+                .map(ApplicationResponse::Json)
             },
             &auth::JWTAuth {
                 permission: Permission::ProfileAnalyticsRead,
+                allow_connected: true,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -1685,19 +1805,27 @@ pub mod routes {
             &req,
             json_payload.into_inner(),
             |state, auth: AuthenticationData, req, _| async move {
+                let profile_id = auth.profile.map(|profile| profile.get_id().clone());
                 utils::check_if_profile_id_is_present_in_payment_intent(
                     req.payment_id.clone(),
                     &state,
-                    &auth,
+                    auth.platform.get_processor(),
+                    profile_id,
                 )
                 .await
                 .change_context(AnalyticsError::AccessForbiddenError)?;
-                sdk_events_core(&state.pool, req, &auth.merchant_account.publishable_key)
-                    .await
-                    .map(ApplicationResponse::Json)
+                sdk_events_core(
+                    &state.pool,
+                    req,
+                    &auth.platform.get_processor().get_account().publishable_key,
+                )
+                .await
+                .map(ApplicationResponse::Json)
             },
             &auth::JWTAuth {
                 permission: Permission::ProfileAnalyticsRead,
+                allow_connected: true,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -1725,8 +1853,8 @@ pub mod routes {
                     .change_context(AnalyticsError::UnknownError)?
                     .get_secret();
 
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let lambda_req = GenerateReportRequest {
                     request: payload,
                     merchant_id: Some(merchant_id.clone()),
@@ -1749,6 +1877,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::MerchantReportRead,
+                allow_connected: true,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -1776,7 +1906,7 @@ pub mod routes {
                     .change_context(AnalyticsError::UnknownError)?
                     .get_secret();
 
-                let org_id = auth.merchant_account.get_org_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
                 let lambda_req = GenerateReportRequest {
                     request: payload,
                     merchant_id: None,
@@ -1798,6 +1928,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::OrganizationReportRead,
+                allow_connected: true,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -1825,12 +1957,14 @@ pub mod routes {
                     .change_context(AnalyticsError::UnknownError)?
                     .get_secret();
 
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let profile_id = auth
-                    .profile_id
+                    .profile
                     .ok_or(report!(UserErrors::JwtProfileIdMissing))
-                    .change_context(AnalyticsError::AccessForbiddenError)?;
+                    .change_context(AnalyticsError::AccessForbiddenError)?
+                    .get_id()
+                    .clone();
                 let lambda_req = GenerateReportRequest {
                     request: payload,
                     merchant_id: Some(merchant_id.clone()),
@@ -1854,6 +1988,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::ProfileReportRead,
+                allow_connected: true,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -1880,8 +2016,8 @@ pub mod routes {
                     .change_context(AnalyticsError::UnknownError)?
                     .get_secret();
 
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let lambda_req = GenerateReportRequest {
                     request: payload,
                     merchant_id: Some(merchant_id.clone()),
@@ -1904,6 +2040,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::MerchantReportRead,
+                allow_connected: true,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -1930,7 +2068,7 @@ pub mod routes {
                     .change_context(AnalyticsError::UnknownError)?
                     .get_secret();
 
-                let org_id = auth.merchant_account.get_org_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
                 let lambda_req = GenerateReportRequest {
                     request: payload,
                     merchant_id: None,
@@ -1952,6 +2090,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::OrganizationReportRead,
+                allow_connected: true,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -1979,12 +2119,14 @@ pub mod routes {
                     .change_context(AnalyticsError::UnknownError)?
                     .get_secret();
 
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let profile_id = auth
-                    .profile_id
+                    .profile
                     .ok_or(report!(UserErrors::JwtProfileIdMissing))
-                    .change_context(AnalyticsError::AccessForbiddenError)?;
+                    .change_context(AnalyticsError::AccessForbiddenError)?
+                    .get_id()
+                    .clone();
                 let lambda_req = GenerateReportRequest {
                     request: payload,
                     merchant_id: Some(merchant_id.clone()),
@@ -2008,6 +2150,171 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::ProfileReportRead,
+                allow_connected: true,
+                allow_platform: false,
+            },
+            api_locking::LockAction::NotApplicable,
+        ))
+        .await
+    }
+
+    #[cfg(feature = "v1")]
+    pub async fn generate_merchant_payout_report(
+        state: web::Data<AppState>,
+        req: actix_web::HttpRequest,
+        json_payload: web::Json<ReportRequest>,
+    ) -> impl Responder {
+        let flow = AnalyticsFlow::GeneratePayoutReport;
+        Box::pin(api::server_wrap(
+            flow,
+            state.clone(),
+            &req,
+            json_payload.into_inner(),
+            |state, (auth, user_id): auth::AuthenticationDataWithUserId, payload, _| async move {
+                let user = UserInterface::find_user_by_id(&*state.global_store, &user_id)
+                    .await
+                    .change_context(AnalyticsError::UnknownError)?;
+
+                let user_email = UserEmail::from_pii_email(user.email)
+                    .change_context(AnalyticsError::UnknownError)?
+                    .get_secret();
+
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
+                let lambda_req = GenerateReportRequest {
+                    request: payload,
+                    merchant_id: Some(merchant_id.clone()),
+                    auth: AuthInfo::MerchantLevel {
+                        org_id: org_id.clone(),
+                        merchant_ids: vec![merchant_id.clone()],
+                    },
+                    email: user_email,
+                };
+
+                let json_bytes =
+                    serde_json::to_vec(&lambda_req).map_err(|_| AnalyticsError::UnknownError)?;
+                invoke_lambda(
+                    &state.conf.report_download_config.payout_function,
+                    &state.conf.report_download_config.region,
+                    &json_bytes,
+                )
+                .await
+                .map(ApplicationResponse::Json)
+            },
+            &auth::JWTAuth {
+                permission: Permission::MerchantReportRead,
+                allow_connected: true,
+                allow_platform: false,
+            },
+            api_locking::LockAction::NotApplicable,
+        ))
+        .await
+    }
+
+    #[cfg(feature = "v1")]
+    pub async fn generate_org_payout_report(
+        state: web::Data<AppState>,
+        req: actix_web::HttpRequest,
+        json_payload: web::Json<ReportRequest>,
+    ) -> impl Responder {
+        let flow = AnalyticsFlow::GeneratePayoutReport;
+        Box::pin(api::server_wrap(
+            flow,
+            state.clone(),
+            &req,
+            json_payload.into_inner(),
+            |state, (auth, user_id): auth::AuthenticationDataWithUserId, payload, _| async move {
+                let user = UserInterface::find_user_by_id(&*state.global_store, &user_id)
+                    .await
+                    .change_context(AnalyticsError::UnknownError)?;
+
+                let user_email = UserEmail::from_pii_email(user.email)
+                    .change_context(AnalyticsError::UnknownError)?
+                    .get_secret();
+
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let lambda_req = GenerateReportRequest {
+                    request: payload,
+                    merchant_id: None,
+                    auth: AuthInfo::OrgLevel {
+                        org_id: org_id.clone(),
+                    },
+                    email: user_email,
+                };
+
+                let json_bytes =
+                    serde_json::to_vec(&lambda_req).map_err(|_| AnalyticsError::UnknownError)?;
+                invoke_lambda(
+                    &state.conf.report_download_config.payout_function,
+                    &state.conf.report_download_config.region,
+                    &json_bytes,
+                )
+                .await
+                .map(ApplicationResponse::Json)
+            },
+            &auth::JWTAuth {
+                permission: Permission::OrganizationReportRead,
+                allow_connected: true,
+                allow_platform: false,
+            },
+            api_locking::LockAction::NotApplicable,
+        ))
+        .await
+    }
+
+    #[cfg(feature = "v1")]
+    pub async fn generate_profile_payout_report(
+        state: web::Data<AppState>,
+        req: actix_web::HttpRequest,
+        json_payload: web::Json<ReportRequest>,
+    ) -> impl Responder {
+        let flow = AnalyticsFlow::GeneratePayoutReport;
+        Box::pin(api::server_wrap(
+            flow,
+            state.clone(),
+            &req,
+            json_payload.into_inner(),
+            |state, (auth, user_id): auth::AuthenticationDataWithUserId, payload, _| async move {
+                let user = UserInterface::find_user_by_id(&*state.global_store, &user_id)
+                    .await
+                    .change_context(AnalyticsError::UnknownError)?;
+
+                let user_email = UserEmail::from_pii_email(user.email)
+                    .change_context(AnalyticsError::UnknownError)?
+                    .get_secret();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
+                let profile_id = auth
+                    .profile
+                    .ok_or(report!(UserErrors::JwtProfileIdMissing))
+                    .change_context(AnalyticsError::AccessForbiddenError)?
+                    .get_id()
+                    .clone();
+                let lambda_req = GenerateReportRequest {
+                    request: payload,
+                    merchant_id: Some(merchant_id.clone()),
+                    auth: AuthInfo::ProfileLevel {
+                        org_id: org_id.clone(),
+                        merchant_id: merchant_id.clone(),
+                        profile_ids: vec![profile_id.clone()],
+                    },
+                    email: user_email,
+                };
+
+                let json_bytes =
+                    serde_json::to_vec(&lambda_req).map_err(|_| AnalyticsError::UnknownError)?;
+                invoke_lambda(
+                    &state.conf.report_download_config.payout_function,
+                    &state.conf.report_download_config.region,
+                    &json_bytes,
+                )
+                .await
+                .map(ApplicationResponse::Json)
+            },
+            &auth::JWTAuth {
+                permission: Permission::ProfileReportRead,
+                allow_connected: true,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -2035,8 +2342,8 @@ pub mod routes {
                     .change_context(AnalyticsError::UnknownError)?
                     .get_secret();
 
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let lambda_req = GenerateReportRequest {
                     request: payload,
                     merchant_id: Some(merchant_id.clone()),
@@ -2059,6 +2366,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::MerchantReportRead,
+                allow_connected: true,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -2086,7 +2395,7 @@ pub mod routes {
                     .change_context(AnalyticsError::UnknownError)?
                     .get_secret();
 
-                let org_id = auth.merchant_account.get_org_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
                 let lambda_req = GenerateReportRequest {
                     request: payload,
                     merchant_id: None,
@@ -2108,6 +2417,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::OrganizationReportRead,
+                allow_connected: true,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -2134,12 +2445,14 @@ pub mod routes {
                 let user_email = UserEmail::from_pii_email(user.email)
                     .change_context(AnalyticsError::UnknownError)?
                     .get_secret();
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let profile_id = auth
-                    .profile_id
+                    .profile
                     .ok_or(report!(UserErrors::JwtProfileIdMissing))
-                    .change_context(AnalyticsError::AccessForbiddenError)?;
+                    .change_context(AnalyticsError::AccessForbiddenError)?
+                    .get_id()
+                    .clone();
                 let lambda_req = GenerateReportRequest {
                     request: payload,
                     merchant_id: Some(merchant_id.clone()),
@@ -2163,6 +2476,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::ProfileReportRead,
+                allow_connected: true,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -2190,8 +2505,8 @@ pub mod routes {
                     .change_context(AnalyticsError::UnknownError)?
                     .get_secret();
 
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let lambda_req = GenerateReportRequest {
                     request: payload,
                     merchant_id: Some(merchant_id.clone()),
@@ -2214,6 +2529,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::MerchantReportRead,
+                allow_connected: true,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -2241,7 +2558,7 @@ pub mod routes {
                     .change_context(AnalyticsError::UnknownError)?
                     .get_secret();
 
-                let org_id = auth.merchant_account.get_org_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
                 let lambda_req = GenerateReportRequest {
                     request: payload,
                     merchant_id: None,
@@ -2263,6 +2580,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::OrganizationReportRead,
+                allow_connected: true,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -2289,12 +2608,14 @@ pub mod routes {
                 let user_email = UserEmail::from_pii_email(user.email)
                     .change_context(AnalyticsError::UnknownError)?
                     .get_secret();
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let profile_id = auth
-                    .profile_id
+                    .profile
                     .ok_or(report!(UserErrors::JwtProfileIdMissing))
-                    .change_context(AnalyticsError::AccessForbiddenError)?;
+                    .change_context(AnalyticsError::AccessForbiddenError)?
+                    .get_id()
+                    .clone();
                 let lambda_req = GenerateReportRequest {
                     request: payload,
                     merchant_id: Some(merchant_id.clone()),
@@ -2318,6 +2639,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::ProfileReportRead,
+                allow_connected: true,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -2348,7 +2671,7 @@ pub mod routes {
             |state, auth: AuthenticationData, req, _| async move {
                 analytics::api_event::get_api_event_metrics(
                     &state.pool,
-                    auth.merchant_account.get_id(),
+                    auth.platform.get_processor().get_account().get_id(),
                     req,
                 )
                 .await
@@ -2356,6 +2679,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::MerchantAnalyticsRead,
+                allow_connected: true,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -2374,12 +2699,18 @@ pub mod routes {
             &req,
             json_payload.into_inner(),
             |state, auth: AuthenticationData, req, _| async move {
-                analytics::api_event::get_filters(&state.pool, req, auth.merchant_account.get_id())
-                    .await
-                    .map(ApplicationResponse::Json)
+                analytics::api_event::get_filters(
+                    &state.pool,
+                    req,
+                    auth.platform.get_processor().get_account().get_id(),
+                )
+                .await
+                .map(ApplicationResponse::Json)
             },
             &auth::JWTAuth {
                 permission: Permission::MerchantAnalyticsRead,
+                allow_connected: true,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -2398,19 +2729,31 @@ pub mod routes {
             &req,
             json_payload.into_inner(),
             |state, auth: AuthenticationData, req, _| async move {
-                utils::check_if_profile_id_is_present_in_payment_intent(
+                #[cfg(feature = "v1")]
+                let profile_id = auth.profile.map(|profile| profile.get_id().clone());
+                #[cfg(feature = "v2")]
+                let profile_id = Some(auth.profile.get_id().clone());
+                utils::check_if_profile_id_is_present_in_intent_table(
                     req.payment_id.clone(),
+                    req.payout_id.clone(),
                     &state,
-                    &auth,
+                    auth.platform.get_processor(),
+                    profile_id,
                 )
                 .await
                 .change_context(AnalyticsError::AccessForbiddenError)?;
-                connector_events_core(&state.pool, req, auth.merchant_account.get_id())
-                    .await
-                    .map(ApplicationResponse::Json)
+                connector_events_core(
+                    &state.pool,
+                    req,
+                    auth.platform.get_processor().get_account().get_id(),
+                )
+                .await
+                .map(ApplicationResponse::Json)
             },
             &auth::JWTAuth {
                 permission: Permission::ProfileAnalyticsRead,
+                allow_connected: true,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -2429,24 +2772,35 @@ pub mod routes {
             &req,
             json_payload.into_inner(),
             |state, auth: AuthenticationData, req, _| async move {
+                #[cfg(feature = "v1")]
+                let profile_id = auth.profile.map(|profile| profile.get_id().clone());
+                #[cfg(feature = "v2")]
+                let profile_id = Some(auth.profile.get_id().clone());
                 utils::check_if_profile_id_is_present_in_payment_intent(
                     req.payment_id.clone(),
                     &state,
-                    &auth,
+                    auth.platform.get_processor(),
+                    profile_id,
                 )
                 .await
                 .change_context(AnalyticsError::AccessForbiddenError)?;
-                routing_events_core(&state.pool, req, auth.merchant_account.get_id())
-                    .await
-                    .map(ApplicationResponse::Json)
+                routing_events_core(
+                    &state.pool,
+                    req,
+                    auth.platform.get_processor().get_account().get_id(),
+                )
+                .await
+                .map(ApplicationResponse::Json)
             },
             auth::auth_type(
                 &auth::HeaderAuth(auth::ApiKeyAuth {
-                    is_connected_allowed: false,
-                    is_platform_allowed: false,
+                    allow_connected_scope_operation: false,
+                    allow_platform_self_operation: false,
                 }),
                 &auth::JWTAuth {
                     permission: Permission::ProfileAnalyticsRead,
+                    allow_connected: true,
+                    allow_platform: false,
                 },
                 req.headers(),
             ),
@@ -2596,6 +2950,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::ProfileAnalyticsRead,
+                allow_connected: true,
+                allow_platform: true,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -2746,6 +3102,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::ProfileAnalyticsRead,
+                allow_connected: true,
+                allow_platform: true,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -2764,8 +3122,8 @@ pub mod routes {
             &req,
             json_payload.into_inner(),
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let auth: AuthInfo = AuthInfo::MerchantLevel {
                     org_id: org_id.clone(),
                     merchant_ids: vec![merchant_id.clone()],
@@ -2776,6 +3134,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::MerchantAnalyticsRead,
+                allow_connected: false,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -2795,12 +3155,14 @@ pub mod routes {
             &req,
             json_payload.into_inner(),
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let profile_id = auth
-                    .profile_id
+                    .profile
                     .ok_or(report!(UserErrors::JwtProfileIdMissing))
-                    .change_context(AnalyticsError::AccessForbiddenError)?;
+                    .change_context(AnalyticsError::AccessForbiddenError)?
+                    .get_id()
+                    .clone();
                 let auth: AuthInfo = AuthInfo::ProfileLevel {
                     org_id: org_id.clone(),
                     merchant_id: merchant_id.clone(),
@@ -2812,6 +3174,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::ProfileAnalyticsRead,
+                allow_connected: false,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -2831,7 +3195,7 @@ pub mod routes {
             &req,
             json_payload.into_inner(),
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
                 let auth: AuthInfo = AuthInfo::OrgLevel {
                     org_id: org_id.clone(),
                 };
@@ -2846,6 +3210,8 @@ pub mod routes {
                 },
                 &auth::JWTAuth {
                     permission: Permission::OrganizationAnalyticsRead,
+                    allow_connected: false,
+                    allow_platform: false,
                 },
                 req.headers(),
             ),
@@ -2876,8 +3242,8 @@ pub mod routes {
             &req,
             payload,
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let auth: AuthInfo = AuthInfo::MerchantLevel {
                     org_id: org_id.clone(),
                     merchant_ids: vec![merchant_id.clone()],
@@ -2888,6 +3254,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::MerchantAnalyticsRead,
+                allow_connected: false,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -2917,12 +3285,14 @@ pub mod routes {
             &req,
             payload,
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let profile_id = auth
-                    .profile_id
+                    .profile
                     .ok_or(report!(UserErrors::JwtProfileIdMissing))
-                    .change_context(AnalyticsError::AccessForbiddenError)?;
+                    .change_context(AnalyticsError::AccessForbiddenError)?
+                    .get_id()
+                    .clone();
                 let auth: AuthInfo = AuthInfo::ProfileLevel {
                     org_id: org_id.clone(),
                     merchant_id: merchant_id.clone(),
@@ -2934,6 +3304,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::ProfileAnalyticsRead,
+                allow_connected: false,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -2963,7 +3335,7 @@ pub mod routes {
             &req,
             payload,
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
                 let auth: AuthInfo = AuthInfo::OrgLevel {
                     org_id: org_id.clone(),
                 };
@@ -2978,6 +3350,8 @@ pub mod routes {
                 },
                 &auth::JWTAuth {
                     permission: Permission::OrganizationAnalyticsRead,
+                    allow_connected: false,
+                    allow_platform: false,
                 },
                 req.headers(),
             ),
@@ -2999,8 +3373,8 @@ pub mod routes {
             &req,
             payload,
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let auth: AuthInfo = AuthInfo::MerchantLevel {
                     org_id: org_id.clone(),
                     merchant_ids: vec![merchant_id.clone()],
@@ -3011,6 +3385,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::MerchantAnalyticsRead,
+                allow_connected: false,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -3030,8 +3406,8 @@ pub mod routes {
             &req,
             payload,
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let auth: AuthInfo = AuthInfo::MerchantLevel {
                     org_id: org_id.clone(),
                     merchant_ids: vec![merchant_id.clone()],
@@ -3042,6 +3418,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::MerchantAnalyticsRead,
+                allow_connected: false,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -3062,7 +3440,7 @@ pub mod routes {
             &req,
             payload,
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
                 let auth: AuthInfo = AuthInfo::OrgLevel {
                     org_id: org_id.clone(),
                 };
@@ -3077,6 +3455,8 @@ pub mod routes {
                 },
                 &auth::JWTAuth {
                     permission: Permission::OrganizationAnalyticsRead,
+                    allow_connected: false,
+                    allow_platform: false,
                 },
                 req.headers(),
             ),
@@ -3099,12 +3479,14 @@ pub mod routes {
             &req,
             payload,
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let profile_id = auth
-                    .profile_id
+                    .profile
                     .ok_or(report!(UserErrors::JwtProfileIdMissing))
-                    .change_context(AnalyticsError::AccessForbiddenError)?;
+                    .change_context(AnalyticsError::AccessForbiddenError)?
+                    .get_id()
+                    .clone();
                 let auth: AuthInfo = AuthInfo::ProfileLevel {
                     org_id: org_id.clone(),
                     merchant_id: merchant_id.clone(),
@@ -3116,6 +3498,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::ProfileAnalyticsRead,
+                allow_connected: false,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))
@@ -3136,7 +3520,7 @@ pub mod routes {
             &req,
             payload,
             |state, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
                 let auth: AuthInfo = AuthInfo::OrgLevel {
                     org_id: org_id.clone(),
                 };
@@ -3151,6 +3535,8 @@ pub mod routes {
                 },
                 &auth::JWTAuth {
                     permission: Permission::OrganizationAnalyticsRead,
+                    allow_connected: false,
+                    allow_platform: false,
                 },
                 req.headers(),
             ),
@@ -3173,12 +3559,14 @@ pub mod routes {
             &req,
             payload,
             |state: crate::routes::SessionState, auth: AuthenticationData, req, _| async move {
-                let org_id = auth.merchant_account.get_org_id();
-                let merchant_id = auth.merchant_account.get_id();
+                let org_id = auth.platform.get_processor().get_account().get_org_id();
+                let merchant_id = auth.platform.get_processor().get_account().get_id();
                 let profile_id = auth
-                    .profile_id
+                    .profile
                     .ok_or(report!(UserErrors::JwtProfileIdMissing))
-                    .change_context(AnalyticsError::AccessForbiddenError)?;
+                    .change_context(AnalyticsError::AccessForbiddenError)?
+                    .get_id()
+                    .clone();
                 let auth: AuthInfo = AuthInfo::ProfileLevel {
                     org_id: org_id.clone(),
                     merchant_id: merchant_id.clone(),
@@ -3190,6 +3578,8 @@ pub mod routes {
             },
             &auth::JWTAuth {
                 permission: Permission::ProfileAnalyticsRead,
+                allow_connected: false,
+                allow_platform: false,
             },
             api_locking::LockAction::NotApplicable,
         ))

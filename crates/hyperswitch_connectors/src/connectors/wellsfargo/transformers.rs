@@ -1,31 +1,31 @@
 use api_models::payments;
 use base64::Engine;
 use common_enums::{enums, FutureUsage};
+use common_types::payments::ApplePayPredecryptData;
 use common_utils::{
     consts, pii,
     types::{SemanticVersion, StringMajorUnit},
 };
+use error_stack::ResultExt;
 use hyperswitch_domain_models::{
     payment_method_data::{
         ApplePayWalletData, BankDebitData, GooglePayWalletData, PaymentMethodData, WalletData,
     },
     router_data::{
-        AdditionalPaymentMethodConnectorResponse, ApplePayPredecryptData, ConnectorAuthType,
-        ConnectorResponseData, ErrorResponse, PaymentMethodToken, RouterData,
+        AdditionalPaymentMethodConnectorResponse, ConnectorAuthType, ConnectorResponseData,
+        ErrorResponse, PaymentMethodToken, RouterData,
     },
     router_flow_types::{
         payments::Authorize,
         refunds::{Execute, RSync},
         SetupMandate,
     },
-    router_request_types::{
-        PaymentsAuthorizeData, PaymentsCancelData, PaymentsCaptureData, PaymentsSyncData,
-        ResponseId, SetupMandateRequestData,
-    },
+    router_request_types::{PaymentsAuthorizeData, ResponseId, SetupMandateRequestData},
     router_response_types::{MandateReference, PaymentsResponseData, RefundsResponseData},
     types::{
         PaymentsAuthorizeRouterData, PaymentsCancelRouterData, PaymentsCaptureRouterData,
-        PaymentsIncrementalAuthorizationRouterData, RefundsRouterData, SetupMandateRouterData,
+        PaymentsIncrementalAuthorizationRouterData, PaymentsSyncRouterData, RefundsRouterData,
+        SetupMandateRouterData,
     },
 };
 use hyperswitch_interfaces::{api, errors};
@@ -35,10 +35,13 @@ use serde_json::Value;
 
 use crate::{
     constants,
-    types::{RefundsResponseRouterData, ResponseRouterData},
+    types::{
+        PaymentsCancelResponseRouterData, PaymentsCaptureResponseRouterData,
+        PaymentsSyncResponseRouterData, RefundsResponseRouterData, ResponseRouterData,
+    },
     unimplemented_payment_method,
     utils::{
-        self, AddressDetailsData, ApplePayDecrypt, CardData, PaymentsAuthorizeRequestData,
+        self, AddressDetailsData, CardData, PaymentsAuthorizeRequestData,
         PaymentsSetupMandateRequestData, PaymentsSyncRequestData, RecurringMandateData,
         RouterData as OtherRouterData,
     },
@@ -93,7 +96,7 @@ impl TryFrom<&SetupMandateRouterData> for WellsfargoZeroMandateRequest {
                     credential_stored_on_file: Some(true),
                     stored_credential_used: None,
                 }),
-                merchant_intitiated_transaction: None,
+                merchant_initiated_transaction: None,
             }),
         );
 
@@ -126,8 +129,12 @@ impl TryFrom<&SetupMandateRouterData> for WellsfargoZeroMandateRequest {
                 WalletData::ApplePay(apple_pay_data) => match item.payment_method_token.clone() {
                     Some(payment_method_token) => match payment_method_token {
                         PaymentMethodToken::ApplePayDecrypt(decrypt_data) => {
-                            let expiration_month = decrypt_data.get_expiry_month()?;
-                            let expiration_year = decrypt_data.get_four_digit_expiry_year()?;
+                            let expiration_month = decrypt_data.get_expiry_month().change_context(
+                                errors::ConnectorError::InvalidDataFormat {
+                                    field_name: "expiration_month",
+                                },
+                            )?;
+                            let expiration_year = decrypt_data.get_four_digit_expiry_year();
                             (
                                 PaymentInformation::ApplePay(Box::new(
                                     ApplePayPaymentInformation {
@@ -157,27 +164,43 @@ impl TryFrom<&SetupMandateRouterData> for WellsfargoZeroMandateRequest {
                             Err(unimplemented_payment_method!("Google Pay", "Wellsfargo"))?
                         }
                     },
-                    None => (
-                        PaymentInformation::ApplePayToken(Box::new(
-                            ApplePayTokenPaymentInformation {
-                                fluid_data: FluidData {
-                                    value: Secret::from(apple_pay_data.payment_data),
-                                    descriptor: Some(FLUID_DATA_DESCRIPTOR.to_string()),
+                    None => {
+                        let apple_pay_encrypted_data = apple_pay_data
+                            .payment_data
+                            .get_encrypted_apple_pay_payment_data_mandatory()
+                            .change_context(errors::ConnectorError::MissingRequiredField {
+                                field_name: "Apple pay encrypted data",
+                            })?;
+                        (
+                            PaymentInformation::ApplePayToken(Box::new(
+                                ApplePayTokenPaymentInformation {
+                                    fluid_data: FluidData {
+                                        value: Secret::from(apple_pay_encrypted_data.clone()),
+                                        descriptor: Some(FLUID_DATA_DESCRIPTOR.to_string()),
+                                    },
+                                    tokenized_card: ApplePayTokenizedCard {
+                                        transaction_type: TransactionType::ApplePay,
+                                    },
                                 },
-                                tokenized_card: ApplePayTokenizedCard {
-                                    transaction_type: TransactionType::ApplePay,
-                                },
-                            },
-                        )),
-                        Some(PaymentSolution::ApplePay),
-                    ),
+                            )),
+                            Some(PaymentSolution::ApplePay),
+                        )
+                    }
                 },
                 WalletData::GooglePay(google_pay_data) => (
                     PaymentInformation::GooglePay(Box::new(GooglePayPaymentInformation {
                         fluid_data: FluidData {
                             value: Secret::from(
-                                consts::BASE64_ENGINE
-                                    .encode(google_pay_data.tokenization_data.token),
+                                consts::BASE64_ENGINE.encode(
+                                    google_pay_data
+                                        .tokenization_data
+                                        .get_encrypted_google_pay_token()
+                                        .change_context(
+                                            errors::ConnectorError::MissingRequiredField {
+                                                field_name: "gpay wallet_token",
+                                            },
+                                        )?,
+                                ),
                             ),
                             descriptor: None,
                         },
@@ -206,6 +229,7 @@ impl TryFrom<&SetupMandateRouterData> for WellsfargoZeroMandateRequest {
                 | WalletData::PaypalSdk(_)
                 | WalletData::Paze(_)
                 | WalletData::SamsungPay(_)
+                | WalletData::AmazonPay(_)
                 | WalletData::TwintRedirect {}
                 | WalletData::VippsRedirect {}
                 | WalletData::TouchNGoRedirect(_)
@@ -234,7 +258,10 @@ impl TryFrom<&SetupMandateRouterData> for WellsfargoZeroMandateRequest {
             | PaymentMethodData::OpenBanking(_)
             | PaymentMethodData::CardToken(_)
             | PaymentMethodData::NetworkToken(_)
-            | PaymentMethodData::CardDetailsForNetworkTransactionId(_) => {
+            | PaymentMethodData::CardDetailsForNetworkTransactionId(_)
+            | PaymentMethodData::CardWithLimitedDetails(_)
+            | PaymentMethodData::DecryptedWalletTokenDetailsForNetworkTransactionId(_)
+            | PaymentMethodData::NetworkTokenDetailsForNetworkTransactionId(_) => {
                 Err(errors::ConnectorError::NotImplemented(
                     utils::get_unimplemented_payment_method_error_message("Wellsfargo"),
                 ))?
@@ -327,7 +354,7 @@ pub enum WellsfargoActionsTokenType {
 #[serde(rename_all = "camelCase")]
 pub struct WellsfargoAuthorizationOptions {
     initiator: Option<WellsfargoPaymentInitiator>,
-    merchant_intitiated_transaction: Option<MerchantInitiatedTransaction>,
+    merchant_initiated_transaction: Option<MerchantInitiatedTransaction>,
 }
 
 #[derive(Debug, Serialize)]
@@ -371,7 +398,7 @@ pub struct CardPaymentInformation {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenizedCard {
-    number: Secret<String>,
+    number: cards::CardNumber,
     expiration_month: Secret<String>,
     expiration_year: Secret<String>,
     cryptogram: Secret<String>,
@@ -610,7 +637,7 @@ impl
                         credential_stored_on_file: Some(true),
                         stored_credential_used: None,
                     }),
-                    merchant_intitiated_transaction: None,
+                    merchant_initiated_transaction: None,
                 }),
             )
         } else if item.router_data.request.mandate_id.is_some() {
@@ -635,7 +662,7 @@ impl
                         None,
                         Some(WellsfargoAuthorizationOptions {
                             initiator: None,
-                            merchant_intitiated_transaction: Some(MerchantInitiatedTransaction {
+                            merchant_initiated_transaction: Some(MerchantInitiatedTransaction {
                                 reason: None,
                                 original_authorized_amount: Some(utils::get_amount_as_string(
                                     &api::CurrencyUnit::Base,
@@ -705,7 +732,7 @@ impl
                                 credential_stored_on_file: None,
                                 stored_credential_used: Some(true),
                             }),
-                            merchant_intitiated_transaction: Some(MerchantInitiatedTransaction {
+                            merchant_initiated_transaction: Some(MerchantInitiatedTransaction {
                                 reason: Some("7".to_string()),
                                 original_authorized_amount,
                                 previous_transaction_id: Some(Secret::new(network_transaction_id)),
@@ -713,9 +740,9 @@ impl
                         }),
                     )
                 }
-                Some(payments::MandateReferenceId::NetworkTokenWithNTI(_)) | None => {
-                    (None, None, None)
-                }
+                Some(payments::MandateReferenceId::NetworkTokenWithNTI(_))
+                | Some(payments::MandateReferenceId::CardWithLimitedData)
+                | None => (None, None, None),
             }
         } else {
             (None, None, None)
@@ -900,6 +927,12 @@ impl
             hyperswitch_domain_models::payment_method_data::Card,
         ),
     ) -> Result<Self, Self::Error> {
+        if item.router_data.is_three_ds() {
+            Err(errors::ConnectorError::NotSupported {
+                message: "Cards 3DS".to_string(),
+                connector: "Wellsfargo",
+            })?
+        }
         let email = item.router_data.request.get_email()?;
         let bill_to = build_bill_to(item.router_data.get_optional_billing(), email)?;
         let order_information = OrderInformationWithBill::from((item, Some(bill_to)));
@@ -991,8 +1024,12 @@ impl
             Some(apple_pay_wallet_data.payment_method.network.clone()),
         ))?;
         let client_reference_information = ClientReferenceInformation::from(item);
-        let expiration_month = apple_pay_data.get_expiry_month()?;
-        let expiration_year = apple_pay_data.get_four_digit_expiry_year()?;
+        let expiration_month = apple_pay_data.get_expiry_month().change_context(
+            errors::ConnectorError::InvalidDataFormat {
+                field_name: "expiration_month",
+            },
+        )?;
+        let expiration_year = apple_pay_data.get_four_digit_expiry_year();
         let payment_information =
             PaymentInformation::ApplePay(Box::new(ApplePayPaymentInformation {
                 tokenized_card: TokenizedCard {
@@ -1059,7 +1096,14 @@ impl
             PaymentInformation::GooglePay(Box::new(GooglePayPaymentInformation {
                 fluid_data: FluidData {
                     value: Secret::from(
-                        consts::BASE64_ENGINE.encode(google_pay_data.tokenization_data.token),
+                        consts::BASE64_ENGINE.encode(
+                            google_pay_data
+                                .tokenization_data
+                                .get_encrypted_google_pay_token()
+                                .change_context(errors::ConnectorError::MissingRequiredField {
+                                    field_name: "gpay wallet_token",
+                                })?,
+                        ),
                     ),
                     descriptor: None,
                 },
@@ -1136,9 +1180,12 @@ impl
             ))),
             BankDebitData::SepaBankDebit { .. }
             | BankDebitData::BacsBankDebit { .. }
-            | BankDebitData::BecsBankDebit { .. } => Err(errors::ConnectorError::NotImplemented(
-                utils::get_unimplemented_payment_method_error_message("Wellsfargo"),
-            )),
+            | BankDebitData::BecsBankDebit { .. }
+            | BankDebitData::SepaGuarenteedBankDebit { .. } => {
+                Err(errors::ConnectorError::NotImplemented(
+                    utils::get_unimplemented_payment_method_error_message("Wellsfargo"),
+                ))
+            }
         }?;
         let processing_information =
             ProcessingInformation::try_from((item, Some(PaymentSolution::GooglePay), None))?;
@@ -1201,10 +1248,21 @@ impl TryFrom<&WellsfargoRouterData<&PaymentsAuthorizeRouterData>> for Wellsfargo
                                         ))?;
                                     let client_reference_information =
                                         ClientReferenceInformation::from(item);
+
+                                    let apple_pay_encrypted_data = apple_pay_data
+                                        .payment_data
+                                        .get_encrypted_apple_pay_payment_data_mandatory()
+                                        .change_context(
+                                            errors::ConnectorError::MissingRequiredField {
+                                                field_name: "Apple pay encrypted data",
+                                            },
+                                        )?;
                                     let payment_information = PaymentInformation::ApplePayToken(
                                         Box::new(ApplePayTokenPaymentInformation {
                                             fluid_data: FluidData {
-                                                value: Secret::from(apple_pay_data.payment_data),
+                                                value: Secret::from(
+                                                    apple_pay_encrypted_data.to_string(),
+                                                ),
                                                 descriptor: Some(FLUID_DATA_DESCRIPTOR.to_string()),
                                             },
                                             tokenized_card: ApplePayTokenizedCard {
@@ -1272,6 +1330,7 @@ impl TryFrom<&WellsfargoRouterData<&PaymentsAuthorizeRouterData>> for Wellsfargo
                         | WalletData::PaypalSdk(_)
                         | WalletData::Paze(_)
                         | WalletData::SamsungPay(_)
+                        | WalletData::AmazonPay(_)
                         | WalletData::TwintRedirect {}
                         | WalletData::VippsRedirect {}
                         | WalletData::TouchNGoRedirect(_)
@@ -1311,7 +1370,10 @@ impl TryFrom<&WellsfargoRouterData<&PaymentsAuthorizeRouterData>> for Wellsfargo
                     | PaymentMethodData::OpenBanking(_)
                     | PaymentMethodData::CardToken(_)
                     | PaymentMethodData::NetworkToken(_)
-                    | PaymentMethodData::CardDetailsForNetworkTransactionId(_) => {
+                    | PaymentMethodData::CardDetailsForNetworkTransactionId(_)
+                    | PaymentMethodData::CardWithLimitedDetails(_)
+                    | PaymentMethodData::DecryptedWalletTokenDetailsForNetworkTransactionId(_)
+                    | PaymentMethodData::NetworkTokenDetailsForNetworkTransactionId(_) => {
                         Err(errors::ConnectorError::NotImplemented(
                             utils::get_unimplemented_payment_method_error_message("Wellsfargo"),
                         )
@@ -1436,7 +1498,7 @@ impl TryFrom<&WellsfargoRouterData<&PaymentsIncrementalAuthorizationRouterData>>
                         credential_stored_on_file: None,
                         stored_credential_used: Some(true),
                     }),
-                    merchant_intitiated_transaction: Some(MerchantInitiatedTransaction {
+                    merchant_initiated_transaction: Some(MerchantInitiatedTransaction {
                         reason: Some("5".to_owned()),
                         previous_transaction_id: None,
                         original_authorized_amount: None,
@@ -1752,6 +1814,7 @@ fn get_payment_response(
                         .unwrap_or(info_response.id.clone()),
                 ),
                 incremental_authorization_allowed,
+                authentication_data: None,
                 charges: None,
             })
         }
@@ -1813,28 +1876,17 @@ impl From<&ClientProcessorInformation> for AdditionalPaymentMethodConnectorRespo
             payment_checks,
             card_network: None,
             domestic_network: None,
+            auth_code: None,
         }
     }
 }
 
-impl<F>
-    TryFrom<
-        ResponseRouterData<
-            F,
-            WellsfargoPaymentsResponse,
-            PaymentsCaptureData,
-            PaymentsResponseData,
-        >,
-    > for RouterData<F, PaymentsCaptureData, PaymentsResponseData>
+impl TryFrom<PaymentsCaptureResponseRouterData<WellsfargoPaymentsResponse>>
+    for PaymentsCaptureRouterData
 {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(
-        item: ResponseRouterData<
-            F,
-            WellsfargoPaymentsResponse,
-            PaymentsCaptureData,
-            PaymentsResponseData,
-        >,
+        item: PaymentsCaptureResponseRouterData<WellsfargoPaymentsResponse>,
     ) -> Result<Self, Self::Error> {
         let status = map_attempt_status(
             item.response
@@ -1853,19 +1905,12 @@ impl<F>
     }
 }
 
-impl<F>
-    TryFrom<
-        ResponseRouterData<F, WellsfargoPaymentsResponse, PaymentsCancelData, PaymentsResponseData>,
-    > for RouterData<F, PaymentsCancelData, PaymentsResponseData>
+impl TryFrom<PaymentsCancelResponseRouterData<WellsfargoPaymentsResponse>>
+    for PaymentsCancelRouterData
 {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(
-        item: ResponseRouterData<
-            F,
-            WellsfargoPaymentsResponse,
-            PaymentsCancelData,
-            PaymentsResponseData,
-        >,
+        item: PaymentsCancelResponseRouterData<WellsfargoPaymentsResponse>,
     ) -> Result<Self, Self::Error> {
         let status = map_attempt_status(
             item.response
@@ -1962,6 +2007,7 @@ impl
                     incremental_authorization_allowed: Some(
                         mandate_status == enums::AttemptStatus::Authorized,
                     ),
+                    authentication_data: None,
                     charges: None,
                 }),
             },
@@ -2025,24 +2071,12 @@ pub struct ApplicationInformation {
     status: Option<WellsfargoPaymentStatus>,
 }
 
-impl<F>
-    TryFrom<
-        ResponseRouterData<
-            F,
-            WellsfargoTransactionResponse,
-            PaymentsSyncData,
-            PaymentsResponseData,
-        >,
-    > for RouterData<F, PaymentsSyncData, PaymentsResponseData>
+impl TryFrom<PaymentsSyncResponseRouterData<WellsfargoTransactionResponse>>
+    for PaymentsSyncRouterData
 {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(
-        item: ResponseRouterData<
-            F,
-            WellsfargoTransactionResponse,
-            PaymentsSyncData,
-            PaymentsResponseData,
-        >,
+        item: PaymentsSyncResponseRouterData<WellsfargoTransactionResponse>,
     ) -> Result<Self, Self::Error> {
         match item.response.application_information.status {
             Some(status) => {
@@ -2079,6 +2113,7 @@ impl<F>
                                 .map(|cref| cref.code)
                                 .unwrap_or(Some(item.response.id)),
                             incremental_authorization_allowed,
+                            authentication_data: None,
                             charges: None,
                         }),
                         ..item.data
@@ -2095,6 +2130,7 @@ impl<F>
                     network_txn_id: None,
                     connector_response_reference_id: Some(item.response.id),
                     incremental_authorization_allowed: None,
+                    authentication_data: None,
                     charges: None,
                 }),
                 ..item.data
@@ -2389,9 +2425,11 @@ pub fn get_error_response(
         status_code,
         attempt_status,
         connector_transaction_id: Some(transaction_id.clone()),
+        connector_response_reference_id: None,
         network_advice_code: None,
         network_decline_code: None,
         network_error_message: None,
+        connector_metadata: None,
     }
 }
 pub fn get_error_reason(

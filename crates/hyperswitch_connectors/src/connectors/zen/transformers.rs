@@ -486,6 +486,7 @@ impl
             ),
             WalletData::WeChatPayRedirect(_)
             | WalletData::PaypalRedirect(_)
+            | WalletData::AmazonPay(_)
             | WalletData::ApplePay(_)
             | WalletData::GooglePay(_)
             | WalletData::BluecodeRedirect {}
@@ -714,7 +715,10 @@ impl TryFrom<&ZenRouterData<&types::PaymentsAuthorizeRouterData>> for ZenPayment
             | PaymentMethodData::OpenBanking(_)
             | PaymentMethodData::CardToken(_)
             | PaymentMethodData::NetworkToken(_)
-            | PaymentMethodData::CardDetailsForNetworkTransactionId(_) => {
+            | PaymentMethodData::CardDetailsForNetworkTransactionId(_)
+            | PaymentMethodData::CardWithLimitedDetails(_)
+            | PaymentMethodData::DecryptedWalletTokenDetailsForNetworkTransactionId(_)
+            | PaymentMethodData::NetworkTokenDetailsForNetworkTransactionId(_) => {
                 Err(errors::ConnectorError::NotImplemented(
                     utils::get_unimplemented_payment_method_error_message("Zen"),
                 ))?
@@ -745,12 +749,11 @@ impl TryFrom<&BankRedirectData> for ZenPaymentsRequest {
             | BankRedirectData::OpenBankingUk { .. }
             | BankRedirectData::OnlineBankingFpx { .. }
             | BankRedirectData::OnlineBankingThailand { .. }
-            | BankRedirectData::LocalBankRedirect {} => {
-                Err(errors::ConnectorError::NotImplemented(
-                    utils::get_unimplemented_payment_method_error_message("Zen"),
-                )
-                .into())
-            }
+            | BankRedirectData::LocalBankRedirect {}
+            | BankRedirectData::OpenBanking { .. } => Err(errors::ConnectorError::NotImplemented(
+                utils::get_unimplemented_payment_method_error_message("Zen"),
+            )
+            .into()),
         }
     }
 }
@@ -768,7 +771,8 @@ impl TryFrom<&PayLaterData> for ZenPaymentsRequest {
             | PayLaterData::AlmaRedirect {}
             | PayLaterData::FlexitiRedirect {}
             | PayLaterData::AtomeRedirect {}
-            | PayLaterData::BreadpayRedirect {} => Err(errors::ConnectorError::NotImplemented(
+            | PayLaterData::BreadpayRedirect {}
+            | PayLaterData::PayjustnowRedirect {} => Err(errors::ConnectorError::NotImplemented(
                 utils::get_unimplemented_payment_method_error_message("Zen"),
             )
             .into()),
@@ -783,10 +787,13 @@ impl TryFrom<&BankDebitData> for ZenPaymentsRequest {
             BankDebitData::AchBankDebit { .. }
             | BankDebitData::SepaBankDebit { .. }
             | BankDebitData::BecsBankDebit { .. }
-            | BankDebitData::BacsBankDebit { .. } => Err(errors::ConnectorError::NotImplemented(
-                utils::get_unimplemented_payment_method_error_message("Zen"),
-            )
-            .into()),
+            | BankDebitData::BacsBankDebit { .. }
+            | BankDebitData::SepaGuarenteedBankDebit { .. } => {
+                Err(errors::ConnectorError::NotImplemented(
+                    utils::get_unimplemented_payment_method_error_message("Zen"),
+                )
+                .into())
+            }
         }
     }
 }
@@ -810,12 +817,12 @@ impl TryFrom<&GiftCardData> for ZenPaymentsRequest {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(value: &GiftCardData) -> Result<Self, Self::Error> {
         match value {
-            GiftCardData::PaySafeCard {} | GiftCardData::Givex(_) => {
-                Err(errors::ConnectorError::NotImplemented(
-                    utils::get_unimplemented_payment_method_error_message("Zen"),
-                )
-                .into())
-            }
+            GiftCardData::PaySafeCard {}
+            | GiftCardData::Givex(_)
+            | GiftCardData::BhnCardNetwork(_) => Err(errors::ConnectorError::NotImplemented(
+                utils::get_unimplemented_payment_method_error_message("Zen"),
+            )
+            .into()),
         }
     }
 }
@@ -949,9 +956,11 @@ fn get_zen_response(
             status_code,
             attempt_status: Some(status),
             connector_transaction_id: Some(response.id.clone()),
+            connector_response_reference_id: None,
             network_advice_code: None,
             network_decline_code: None,
             network_error_message: None,
+            connector_metadata: None,
         })
     } else {
         None
@@ -964,6 +973,7 @@ fn get_zen_response(
         network_txn_id: None,
         connector_response_reference_id: None,
         incremental_authorization_allowed: None,
+        authentication_data: None,
         charges: None,
     };
     Ok((status, error, payment_response_data))
@@ -1008,6 +1018,7 @@ impl<F, T> TryFrom<ResponseRouterData<F, CheckoutResponse, T, PaymentsResponseDa
                 network_txn_id: None,
                 connector_response_reference_id: None,
                 incremental_authorization_allowed: None,
+                authentication_data: None,
                 charges: None,
             }),
             ..value.data
@@ -1098,9 +1109,11 @@ fn get_zen_refund_response(
             status_code,
             attempt_status: None,
             connector_transaction_id: Some(response.id.clone()),
+            connector_response_reference_id: None,
             network_advice_code: None,
             network_decline_code: None,
             network_error_message: None,
+            connector_metadata: None,
         })
     } else {
         None

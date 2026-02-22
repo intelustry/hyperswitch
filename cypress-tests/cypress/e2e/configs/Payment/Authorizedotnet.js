@@ -1,3 +1,4 @@
+import { generateRandomEmail } from "../../../utils/RequestBodyUtils";
 import {
   customerAcceptance,
   multiUseMandateData,
@@ -10,14 +11,17 @@ const successfulNo3DSCardDetails = {
   card_exp_year: "2029",
   card_holder_name: "John Doe",
   card_cvc: "123",
+  card_network: "Visa",
 };
 
 const successfulThreeDSTestCardDetails = {
-  card_number: "4000000000000002",
+  // Visa test card (approved in Authorize.Net sandbox)
+  card_number: "4111111111111111",
   card_exp_month: "12",
   card_exp_year: "2029",
   card_holder_name: "John Doe",
   card_cvc: "123",
+  card_network: "Visa",
 };
 
 const failedNo3DSCardDetails = {
@@ -31,10 +35,10 @@ const failedNo3DSCardDetails = {
 const paymentMethodData = {
   card: {
     last4: "1111",
-    card_type: "CREDIT",
+    card_type: "DEBIT",
     card_network: "Visa",
-    card_issuer: "JP Morgan",
-    card_issuing_country: "INDIA",
+    card_issuer: "Conotoxia Sp Z Oo",
+    card_issuing_country: "POLAND",
     card_isin: "411111",
     card_extended_bin: null,
     card_exp_month: "12",
@@ -45,8 +49,23 @@ const paymentMethodData = {
       avs_result_code: "Y",
     },
     authentication_data: null,
+    auth_code: null,
   },
   billing: null,
+};
+
+const billingAddress = {
+  address: {
+    line1: "1467",
+    line2: "Harrison Street",
+    line3: "Harrison Street",
+    city: "San Fransico",
+    state: "California",
+    zip: "94122",
+    country: "US",
+    first_name: "PiX",
+    last_name: "ss",
+  },
 };
 
 export const connectorDetails = {
@@ -56,6 +75,7 @@ export const connectorDetails = {
         currency: "USD",
         customer_acceptance: null,
         setup_future_usage: "on_session",
+        email: generateRandomEmail(),
       },
       Response: {
         status: 200,
@@ -71,6 +91,7 @@ export const connectorDetails = {
         currency: "USD",
         customer_acceptance: null,
         setup_future_usage: "off_session",
+        email: generateRandomEmail(),
       },
       Response: {
         status: 200,
@@ -83,6 +104,7 @@ export const connectorDetails = {
       Request: {
         currency: "USD",
         shipping_cost: 50,
+        email: generateRandomEmail(),
       },
       Response: {
         status: 200,
@@ -101,6 +123,7 @@ export const connectorDetails = {
         },
         customer_acceptance: null,
         setup_future_usage: "on_session",
+        email: generateRandomEmail(),
       },
       Response: {
         status: 200,
@@ -122,12 +145,16 @@ export const connectorDetails = {
         currency: "USD",
         customer_acceptance: null,
         setup_future_usage: "on_session",
+        email: generateRandomEmail(),
       },
       Response: {
-        status: 200,
+        status: 400,
         body: {
-          status: "requires_customer_action",
-          payment_method_data: paymentMethodData,
+          error: {
+            type: "invalid_request",
+            message: "Payment method type not supported",
+            code: "IR_16",
+          },
         },
       },
     },
@@ -140,12 +167,16 @@ export const connectorDetails = {
         currency: "USD",
         customer_acceptance: null,
         setup_future_usage: "on_session",
+        email: generateRandomEmail(),
       },
       Response: {
-        status: 200,
+        status: 400,
         body: {
-          status: "requires_customer_action",
-          payment_method_data: paymentMethodData,
+          error: {
+            type: "invalid_request",
+            message: "Payment method type not supported",
+            code: "IR_16",
+          },
         },
       },
     },
@@ -158,6 +189,7 @@ export const connectorDetails = {
         currency: "USD",
         customer_acceptance: null,
         setup_future_usage: "on_session",
+        email: generateRandomEmail(),
       },
       Response: {
         status: 200,
@@ -176,6 +208,7 @@ export const connectorDetails = {
         currency: "USD",
         customer_acceptance: null,
         setup_future_usage: "on_session",
+        email: generateRandomEmail(),
       },
       Response: {
         status: 200,
@@ -192,12 +225,28 @@ export const connectorDetails = {
           card: failedNo3DSCardDetails,
         },
         customer_acceptance: null,
+        billing: {
+          address: {
+            line1: "1467",
+            line2: "Harrison Street",
+            line3: "Harrison Street",
+            city: "San Fransico",
+            state: "California",
+            zip: "46282",
+            country: "US",
+            first_name: "PiX",
+            last_name: "ss",
+          },
+        },
         setup_future_usage: "on_session",
+        email: generateRandomEmail(),
       },
       Response: {
         status: 200,
         body: {
-          status: "succeeded", // No Test card for failed payment in Authorizedotnet
+          status: "failed",
+          error_code: "2",
+          error_message: "This transaction has been declined.",
         },
       },
     },
@@ -310,12 +359,16 @@ export const connectorDetails = {
         },
         currency: "USD",
         mandate_data: singleUseMandateData,
+        email: generateRandomEmail(),
       },
       Response: {
-        status: 200,
+        status: 400,
         body: {
-          status: "requires_customer_action",
-          payment_method_data: paymentMethodData,
+          error: {
+            type: "invalid_request",
+            message: "Payment method type not supported",
+            code: "IR_16",
+          },
         },
       },
     },
@@ -327,12 +380,16 @@ export const connectorDetails = {
         },
         currency: "USD",
         mandate_data: singleUseMandateData,
+        email: generateRandomEmail(),
       },
       Response: {
-        status: 200,
+        status: 400,
         body: {
-          status: "requires_customer_action",
-          payment_method_data: paymentMethodData,
+          error: {
+            type: "invalid_request",
+            message: "Payment method type not supported",
+            code: "IR_16",
+          },
         },
       },
     },
@@ -344,6 +401,7 @@ export const connectorDetails = {
         },
         currency: "USD",
         mandate_data: singleUseMandateData,
+        email: generateRandomEmail(),
       },
       Response: {
         status: 200,
@@ -361,6 +419,7 @@ export const connectorDetails = {
         },
         currency: "USD",
         mandate_data: singleUseMandateData,
+        email: generateRandomEmail(),
       },
       Response: {
         status: 200,
@@ -377,6 +436,7 @@ export const connectorDetails = {
         },
         currency: "USD",
         mandate_data: multiUseMandateData,
+        email: generateRandomEmail(),
       },
       Response: {
         status: 200,
@@ -394,6 +454,7 @@ export const connectorDetails = {
         },
         currency: "USD",
         mandate_data: multiUseMandateData,
+        email: generateRandomEmail(),
       },
       Response: {
         status: 200,
@@ -411,12 +472,16 @@ export const connectorDetails = {
         },
         currency: "USD",
         mandate_data: multiUseMandateData,
+        email: generateRandomEmail(),
       },
       Response: {
-        status: 200,
+        status: 400,
         body: {
-          status: "requires_customer_action",
-          payment_method_data: paymentMethodData,
+          error: {
+            type: "invalid_request",
+            message: "Payment method type not supported",
+            code: "IR_16",
+          },
         },
       },
     },
@@ -428,12 +493,16 @@ export const connectorDetails = {
         },
         currency: "USD",
         mandate_data: multiUseMandateData,
+        email: generateRandomEmail(),
       },
       Response: {
-        status: 200,
+        status: 400,
         body: {
-          status: "requires_customer_action",
-          payment_method_data: paymentMethodData,
+          error: {
+            type: "invalid_request",
+            message: "Payment method type not supported",
+            code: "IR_16",
+          },
         },
       },
     },
@@ -463,6 +532,7 @@ export const connectorDetails = {
         },
         currency: "USD",
         mandate_data: singleUseMandateData,
+        email: generateRandomEmail(),
       },
       Response: {
         status: 200,
@@ -493,6 +563,9 @@ export const connectorDetails = {
         payment_method_data: {
           card: successfulNo3DSCardDetails,
         },
+        mandate_data: null,
+        customer_acceptance: customerAcceptance,
+        email: generateRandomEmail(),
       },
       Response: {
         status: 200,
@@ -511,6 +584,7 @@ export const connectorDetails = {
         currency: "USD",
         setup_future_usage: "on_session",
         customer_acceptance: customerAcceptance,
+        email: generateRandomEmail(),
       },
       Response: {
         status: 200,
@@ -528,6 +602,7 @@ export const connectorDetails = {
         },
         setup_future_usage: "off_session",
         customer_acceptance: customerAcceptance,
+        email: generateRandomEmail(),
       },
       Response: {
         status: 200,
@@ -545,11 +620,16 @@ export const connectorDetails = {
         },
         setup_future_usage: "off_session",
         customer_acceptance: customerAcceptance,
+        email: generateRandomEmail(),
       },
       Response: {
-        status: 200,
+        status: 400,
         body: {
-          status: "requires_customer_action",
+          error: {
+            type: "invalid_request",
+            message: "Payment method type not supported",
+            code: "IR_16",
+          },
         },
       },
     },
@@ -561,6 +641,7 @@ export const connectorDetails = {
         },
         setup_future_usage: "off_session",
         customer_acceptance: customerAcceptance,
+        email: generateRandomEmail(),
       },
       Response: {
         status: 200,
@@ -572,6 +653,7 @@ export const connectorDetails = {
     SaveCardConfirmAutoCaptureOffSession: {
       Request: {
         setup_future_usage: "off_session",
+        email: generateRandomEmail(),
       },
       Response: {
         status: 200,
@@ -583,6 +665,7 @@ export const connectorDetails = {
     SaveCardConfirmManualCaptureOffSession: {
       Request: {
         setup_future_usage: "off_session",
+        email: generateRandomEmail(),
       },
       Response: {
         status: 200,
@@ -600,6 +683,7 @@ export const connectorDetails = {
         currency: "USD",
         setup_future_usage: "on_session",
         customer_acceptance: customerAcceptance,
+        email: generateRandomEmail(),
       },
       Response: {
         status: 200,
@@ -617,6 +701,7 @@ export const connectorDetails = {
         currency: "USD",
         mandate_data: null,
         customer_acceptance: customerAcceptance,
+        email: generateRandomEmail(),
       },
       Response: {
         status: 200,
@@ -634,6 +719,7 @@ export const connectorDetails = {
         currency: "USD",
         mandate_data: null,
         customer_acceptance: customerAcceptance,
+        email: generateRandomEmail(),
       },
       Response: {
         status: 200,
@@ -652,11 +738,16 @@ export const connectorDetails = {
         mandate_data: null,
         authentication_type: "three_ds",
         customer_acceptance: customerAcceptance,
+        email: generateRandomEmail(),
       },
       Response: {
-        status: 200,
+        status: 400,
         body: {
-          status: "requires_customer_action",
+          error: {
+            type: "invalid_request",
+            message: "Payment method type not supported",
+            code: "IR_16",
+          },
         },
       },
     },
@@ -669,13 +760,88 @@ export const connectorDetails = {
         mandate_data: null,
         authentication_type: "three_ds",
         customer_acceptance: customerAcceptance,
+        email: generateRandomEmail(),
+      },
+      Response: {
+        status: 400,
+        body: {
+          error: {
+            type: "invalid_request",
+            message:
+              "No eligible connector was found for the current payment method configuration",
+            code: "IR_16",
+          },
+        },
+      },
+    },
+    ManualRetryPaymentDisabled: {
+      Request: {
+        payment_method: "card",
+        payment_method_data: {
+          card: successfulNo3DSCardDetails,
+        },
+        currency: "USD",
+        customer_acceptance: null,
+        setup_future_usage: "on_session",
+      },
+      Response: {
+        status: 400,
+        body: {
+          type: "invalid_request",
+          message:
+            "You cannot confirm this payment because it has status failed, you can enable `manual_retry` in profile to try this payment again",
+          code: "IR_16",
+        },
+      },
+    },
+    ManualRetryPaymentEnabled: {
+      Request: {
+        payment_method: "card",
+        payment_method_data: {
+          card: successfulNo3DSCardDetails,
+        },
+        currency: "USD",
+        customer_acceptance: null,
+        setup_future_usage: "on_session",
+        billing: billingAddress,
       },
       Response: {
         status: 200,
         body: {
-          status: "requires_customer_action",
+          status: "succeeded",
+          payment_method: "card",
+          attempt_count: 2,
         },
       },
+    },
+    ManualRetryPaymentCutoffExpired: {
+      Request: {
+        payment_method: "card",
+        payment_method_data: {
+          card: successfulNo3DSCardDetails,
+        },
+        currency: "USD",
+        customer_acceptance: null,
+        setup_future_usage: "on_session",
+        billing: billingAddress,
+      },
+      Response: {
+        status: 400,
+        body: {
+          type: "invalid_request",
+          message:
+            "You cannot confirm this payment using `manual_retry` because the allowed duration has expired",
+          code: "IR_16",
+        },
+      },
+    },
+  },
+  webhook: {
+    TransactionIdConfig: {
+      // Defines how to locate and parse the payment reference ID from connector-specific webhook payloads
+      path: "payload.id",
+      // Type of payment reference ID
+      type: "string",
     },
   },
 };

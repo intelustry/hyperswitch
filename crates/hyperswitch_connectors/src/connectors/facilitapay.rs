@@ -868,6 +868,7 @@ impl webhooks::IncomingWebhook for Facilitapay {
     fn get_webhook_event_type(
         &self,
         request: &webhooks::IncomingWebhookRequestDetails<'_>,
+        _context: Option<&webhooks::WebhookContext>,
     ) -> CustomResult<api_models::webhooks::IncomingWebhookEvent, errors::ConnectorError> {
         let webhook_body: responses::FacilitapayWebhookNotification = request
             .body
@@ -920,7 +921,8 @@ lazy_static! {
             "Facilitapay",
         description:
             "FacilitaPay, the best and most reliable payment provider for your international business.",
-        connector_type: enums::PaymentConnectorCategory::PaymentGateway,
+        connector_type: enums::HyperswitchConnectorCategory::PaymentGateway,
+        integration_status: enums::ConnectorIntegrationStatus::Sandbox,
     };
     static ref FACILITAPAY_SUPPORTED_PAYMENT_METHODS: SupportedPaymentMethods = {
         let facilitapay_supported_capture_methods = vec![
@@ -959,5 +961,12 @@ impl ConnectorSpecifications for Facilitapay {
 
     fn get_supported_webhook_flows(&self) -> Option<&'static [enums::EventClass]> {
         Some(&*FACILITAPAY_SUPPORTED_WEBHOOK_FLOWS)
+    }
+
+    fn should_call_connector_customer(
+        &self,
+        _payment_attempt: &hyperswitch_domain_models::payments::payment_attempt::PaymentAttempt,
+    ) -> bool {
+        true
     }
 }

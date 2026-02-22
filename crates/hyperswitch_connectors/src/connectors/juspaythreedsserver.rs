@@ -14,18 +14,21 @@ use hyperswitch_domain_models::{
         payments::{Authorize, Capture, PSync, PaymentMethodToken, Session, SetupMandate, Void},
         refunds::{Execute, RSync},
         Authenticate, AuthenticationConfirmation, PostAuthenticate, PreAuthenticate,
+        ProcessIncomingWebhook,
     },
     router_request_types::{
         unified_authentication_service::{
             UasAuthenticationRequestData, UasAuthenticationResponseData,
             UasConfirmationRequestData, UasPostAuthenticationRequestData,
-            UasPreAuthenticationRequestData,
+            UasPreAuthenticationRequestData, UasWebhookRequestData,
         },
         AccessTokenRequestData, PaymentMethodTokenizationData, PaymentsAuthorizeData,
         PaymentsCancelData, PaymentsCaptureData, PaymentsSessionData, PaymentsSyncData,
         RefundsData, SetupMandateRequestData,
     },
-    router_response_types::{PaymentsResponseData, RefundsResponseData},
+    router_response_types::{
+        ConnectorInfo, PaymentsResponseData, RefundsResponseData, SupportedPaymentMethods,
+    },
     types::{
         PaymentsAuthorizeRouterData, PaymentsCaptureRouterData, PaymentsSyncRouterData,
         RefundSyncRouterData, RefundsRouterData,
@@ -77,6 +80,7 @@ impl api::UasPreAuthentication for Juspaythreedsserver {}
 impl api::UasPostAuthentication for Juspaythreedsserver {}
 impl api::UasAuthenticationConfirmation for Juspaythreedsserver {}
 impl api::UasAuthentication for Juspaythreedsserver {}
+impl api::UasProcessWebhook for Juspaythreedsserver {}
 
 impl
     ConnectorIntegration<
@@ -100,6 +104,15 @@ impl
     ConnectorIntegration<
         AuthenticationConfirmation,
         UasConfirmationRequestData,
+        UasAuthenticationResponseData,
+    > for Juspaythreedsserver
+{
+}
+
+impl
+    ConnectorIntegration<
+        ProcessIncomingWebhook,
+        UasWebhookRequestData,
         UasAuthenticationResponseData,
     > for Juspaythreedsserver
 {
@@ -187,9 +200,11 @@ impl ConnectorCommon for Juspaythreedsserver {
             reason: response.reason,
             attempt_status: None,
             connector_transaction_id: None,
+            connector_response_reference_id: None,
             network_advice_code: None,
             network_decline_code: None,
             network_error_message: None,
+            connector_metadata: None,
         })
     }
 }
@@ -617,6 +632,7 @@ impl webhooks::IncomingWebhook for Juspaythreedsserver {
     fn get_webhook_event_type(
         &self,
         _request: &webhooks::IncomingWebhookRequestDetails<'_>,
+        _context: Option<&webhooks::WebhookContext>,
     ) -> CustomResult<api_models::webhooks::IncomingWebhookEvent, errors::ConnectorError> {
         Err(report!(errors::ConnectorError::WebhooksNotImplemented))
     }
@@ -629,4 +645,23 @@ impl webhooks::IncomingWebhook for Juspaythreedsserver {
     }
 }
 
-impl ConnectorSpecifications for Juspaythreedsserver {}
+static JUSPAYTHREEDSSERVER_CONNECTOR_INFO: ConnectorInfo = ConnectorInfo {
+    display_name: "Juspay 3Ds Server",
+    description: "Juspay 3DS Server provider for comprehensive 3-Domain Secure authentication, cardholder verification, and fraud prevention across card networks",
+    connector_type: common_enums::HyperswitchConnectorCategory::AuthenticationProvider,
+    integration_status: common_enums::ConnectorIntegrationStatus::Alpha,
+};
+
+impl ConnectorSpecifications for Juspaythreedsserver {
+    fn get_connector_about(&self) -> Option<&'static ConnectorInfo> {
+        Some(&JUSPAYTHREEDSSERVER_CONNECTOR_INFO)
+    }
+
+    fn get_supported_payment_methods(&self) -> Option<&'static SupportedPaymentMethods> {
+        None
+    }
+
+    fn get_supported_webhook_flows(&self) -> Option<&'static [common_enums::enums::EventClass]> {
+        None
+    }
+}

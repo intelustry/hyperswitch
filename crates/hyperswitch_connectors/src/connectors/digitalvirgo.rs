@@ -162,9 +162,11 @@ impl ConnectorCommon for Digitalvirgo {
             reason: response.description,
             attempt_status: None,
             connector_transaction_id: None,
+            connector_response_reference_id: None,
             network_advice_code: None,
             network_decline_code: None,
             network_error_message: None,
+            connector_metadata: None,
         })
     }
 }
@@ -517,6 +519,7 @@ impl webhooks::IncomingWebhook for Digitalvirgo {
     fn get_webhook_event_type(
         &self,
         _request: &webhooks::IncomingWebhookRequestDetails<'_>,
+        _context: Option<&webhooks::WebhookContext>,
     ) -> CustomResult<api_models::webhooks::IncomingWebhookEvent, errors::ConnectorError> {
         Err(report!(errors::ConnectorError::WebhooksNotImplemented))
     }
@@ -555,7 +558,8 @@ static DIGITALVIRGO_CONNECTOR_INFO: ConnectorInfo = ConnectorInfo {
         display_name: "Digital Virgo",
         description:
             "Digital Virgo is an alternative payment provider specializing in carrier billing and mobile payments ",
-        connector_type: enums::PaymentConnectorCategory::AlternativePaymentMethod,
+        connector_type: enums::HyperswitchConnectorCategory::AlternativePaymentMethod,
+        integration_status: enums::ConnectorIntegrationStatus::Alpha,
     };
 
 static DIGITALVIRGO_SUPPORTED_WEBHOOK_FLOWS: [enums::EventClass; 0] = [];

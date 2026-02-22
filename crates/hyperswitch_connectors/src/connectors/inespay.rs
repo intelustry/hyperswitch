@@ -157,9 +157,11 @@ impl ConnectorCommon for Inespay {
             reason: None,
             attempt_status: None,
             connector_transaction_id: None,
+            connector_response_reference_id: None,
             network_advice_code: None,
             network_decline_code: None,
             network_error_message: None,
+            connector_metadata: None,
         })
     }
 }
@@ -692,6 +694,7 @@ impl webhooks::IncomingWebhook for Inespay {
     fn get_webhook_event_type(
         &self,
         request: &webhooks::IncomingWebhookRequestDetails<'_>,
+        _context: Option<&webhooks::WebhookContext>,
     ) -> CustomResult<api_models::webhooks::IncomingWebhookEvent, errors::ConnectorError> {
         let data_return = get_webhook_body(request.body)
             .change_context(errors::ConnectorError::WebhookBodyDecodingFailed)?;
@@ -739,7 +742,8 @@ static INESPAY_CONNECTOR_INFO: ConnectorInfo = ConnectorInfo {
     display_name: "Inespay",
     description:
         "INESPAY is a payment method system that allows online shops to receive money in their bank accounts through a SEPA bank transfer ",
-    connector_type: enums::PaymentConnectorCategory::BankAcquirer,
+    connector_type: enums::HyperswitchConnectorCategory::BankAcquirer,
+    integration_status: enums::ConnectorIntegrationStatus::Sandbox,
 };
 
 static INESPAY_SUPPORTED_WEBHOOK_FLOWS: [enums::EventClass; 2] =

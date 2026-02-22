@@ -129,6 +129,7 @@ impl<F, T> TryFrom<ResponseRouterData<F, InespayPaymentsResponse, T, PaymentsRes
                         network_txn_id: None,
                         connector_response_reference_id: None,
                         incremental_authorization_allowed: None,
+                        authentication_data: None,
                         charges: None,
                     }),
                 )
@@ -141,10 +142,12 @@ impl<F, T> TryFrom<ResponseRouterData<F, InespayPaymentsResponse, T, PaymentsRes
                     reason: Some(data.status_desc.clone()),
                     attempt_status: None,
                     connector_transaction_id: None,
+                    connector_response_reference_id: None,
                     status_code: item.http_code,
                     network_advice_code: None,
                     network_decline_code: None,
                     network_error_message: None,
+                    connector_metadata: None,
                 }),
             ),
         };
@@ -238,6 +241,7 @@ impl<F, T> TryFrom<ResponseRouterData<F, InespayPSyncResponse, T, PaymentsRespon
                         network_txn_id: None,
                         connector_response_reference_id: None,
                         incremental_authorization_allowed: None,
+                        authentication_data: None,
                         charges: None,
                     }),
                     ..item.data
@@ -257,6 +261,7 @@ impl<F, T> TryFrom<ResponseRouterData<F, InespayPSyncResponse, T, PaymentsRespon
                         network_txn_id: None,
                         connector_response_reference_id: None,
                         incremental_authorization_allowed: None,
+                        authentication_data: None,
                         charges: None,
                     }),
                     ..item.data
@@ -269,10 +274,12 @@ impl<F, T> TryFrom<ResponseRouterData<F, InespayPSyncResponse, T, PaymentsRespon
                     reason: Some(data.status_desc.clone()),
                     attempt_status: None,
                     connector_transaction_id: None,
+                    connector_response_reference_id: None,
                     status_code: item.http_code,
                     network_advice_code: None,
                     network_decline_code: None,
                     network_error_message: None,
+                    connector_metadata: None,
                 }),
                 ..item.data
             }),
@@ -364,10 +371,12 @@ impl TryFrom<RefundsResponseRouterData<Execute, InespayRefundsResponse>>
                     reason: Some(data.status_desc.clone()),
                     attempt_status: None,
                     connector_transaction_id: None,
+                    connector_response_reference_id: None,
                     status_code: item.http_code,
                     network_advice_code: None,
                     network_decline_code: None,
                     network_error_message: None,
+                    connector_metadata: None,
                 }),
                 ..item.data
             }),
@@ -411,10 +420,12 @@ impl TryFrom<RefundsResponseRouterData<RSync, InespayRSyncResponse>> for Refunds
                 reason: Some(data.status_desc.clone()),
                 attempt_status: None,
                 connector_transaction_id: None,
+                connector_response_reference_id: None,
                 status_code: item.http_code,
                 network_advice_code: None,
                 network_decline_code: None,
                 network_error_message: None,
+                connector_metadata: None,
             }),
         };
         Ok(Self {

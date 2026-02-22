@@ -3,43 +3,41 @@ use common_enums::enums;
 use common_utils::{
     ext_traits::ValueExt,
     pii::{Email, IpAddress},
+    types::FloatMajorUnit,
 };
 use error_stack::ResultExt;
 use hyperswitch_domain_models::{
     payment_method_data::PaymentMethodData,
     router_data::{ConnectorAuthType, RouterData},
     router_flow_types::refunds::{Execute, RSync},
-    router_request_types::{
-        CompleteAuthorizeData, PaymentsAuthorizeData, PaymentsCancelData, PaymentsCaptureData,
-        PaymentsSyncData, ResponseId,
-    },
+    router_request_types::{CompleteAuthorizeData, PaymentsAuthorizeData, ResponseId},
     router_response_types::{PaymentsResponseData, RedirectForm, RefundsResponseData},
     types,
 };
-use hyperswitch_interfaces::{api, errors};
+use hyperswitch_interfaces::errors;
 use masking::{ExposeInterface, PeekInterface, Secret};
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
-    types::{RefundsResponseRouterData, ResponseRouterData},
+    types::{
+        PaymentsCancelResponseRouterData, PaymentsCaptureResponseRouterData,
+        PaymentsSyncResponseRouterData, RefundsResponseRouterData, ResponseRouterData,
+    },
     utils::{
-        self, AddressDetailsData, BrowserInformationData, CardData as _,
-        PaymentsAuthorizeRequestData, PaymentsCompleteAuthorizeRequestData,
+        self, deserialize_option_empty_string_to_none, AddressDetailsData, BrowserInformationData,
+        CardData as _, PaymentsAuthorizeRequestData, PaymentsCompleteAuthorizeRequestData,
         PaymentsSyncRequestData, RouterData as _,
     },
 };
 
 pub struct BamboraRouterData<T> {
-    pub amount: f64,
+    pub amount: FloatMajorUnit,
     pub router_data: T,
 }
 
-impl<T> TryFrom<(&api::CurrencyUnit, enums::Currency, i64, T)> for BamboraRouterData<T> {
+impl<T> TryFrom<(FloatMajorUnit, T)> for BamboraRouterData<T> {
     type Error = error_stack::Report<errors::ConnectorError>;
-    fn try_from(
-        (currency_unit, currency, amount, item): (&api::CurrencyUnit, enums::Currency, i64, T),
-    ) -> Result<Self, Self::Error> {
-        let amount = utils::get_amount_as_f64(currency_unit, amount, currency)?;
+    fn try_from((amount, item): (FloatMajorUnit, T)) -> Result<Self, Self::Error> {
         Ok(Self {
             amount,
             router_data: item,
@@ -84,7 +82,7 @@ pub struct BamboraBrowserInfo {
 #[derive(Default, Debug, Serialize)]
 pub struct BamboraPaymentsRequest {
     order_number: String,
-    amount: f64,
+    amount: FloatMajorUnit,
     payment_method: PaymentMethod,
     customer_ip: Option<Secret<String, IpAddress>>,
     term_url: Option<String>,
@@ -94,7 +92,7 @@ pub struct BamboraPaymentsRequest {
 
 #[derive(Default, Debug, Serialize)]
 pub struct BamboraVoidRequest {
-    amount: f64,
+    amount: FloatMajorUnit,
 }
 
 fn get_browser_info(
@@ -226,7 +224,10 @@ impl TryFrom<BamboraRouterData<&types::PaymentsAuthorizeRouterData>> for Bambora
             | PaymentMethodData::OpenBanking(_)
             | PaymentMethodData::CardToken(_)
             | PaymentMethodData::NetworkToken(_)
-            | PaymentMethodData::CardDetailsForNetworkTransactionId(_) => {
+            | PaymentMethodData::CardDetailsForNetworkTransactionId(_)
+            | PaymentMethodData::CardWithLimitedDetails(_)
+            | PaymentMethodData::DecryptedWalletTokenDetailsForNetworkTransactionId(_)
+            | PaymentMethodData::NetworkTokenDetailsForNetworkTransactionId(_) => {
                 Err(errors::ConnectorError::NotImplemented(
                     utils::get_unimplemented_payment_method_error_message("bambora"),
                 )
@@ -307,7 +308,7 @@ pub struct BamboraPaymentsResponse {
     message: String,
     auth_code: String,
     created: String,
-    amount: f32,
+    amount: FloatMajorUnit,
     order_number: String,
     #[serde(rename = "type")]
     payment_type: String,
@@ -378,6 +379,7 @@ pub struct AddressData {
     address_line2: Option<Secret<String>>,
     city: Option<String>,
     province: Option<Secret<String>>,
+    #[serde(deserialize_with = "deserialize_option_empty_string_to_none")]
     country: Option<enums::CountryAlpha2>,
     postal_code: Option<Secret<String>>,
     phone_number: Option<Secret<String>>,
@@ -400,7 +402,7 @@ pub struct AdjustedBy {
     adjusted_by_type: String,
     approval: i32,
     message: String,
-    amount: f32,
+    amount: FloatMajorUnit,
     created: String,
     url: String,
 }
@@ -432,7 +434,7 @@ pub enum PaymentMethod {
 // Capture
 #[derive(Default, Debug, Clone, Serialize, PartialEq)]
 pub struct BamboraPaymentsCaptureRequest {
-    amount: f64,
+    amount: FloatMajorUnit,
     payment_method: PaymentMethod,
 }
 
@@ -478,6 +480,7 @@ impl<F> TryFrom<ResponseRouterData<F, BamboraResponse, PaymentsAuthorizeData, Pa
                     network_txn_id: None,
                     connector_response_reference_id: Some(pg_response.order_number.to_string()),
                     incremental_authorization_allowed: None,
+                    authentication_data: None,
                     charges: None,
                 }),
                 ..item.data
@@ -505,6 +508,7 @@ impl<F> TryFrom<ResponseRouterData<F, BamboraResponse, PaymentsAuthorizeData, Pa
                             item.data.connector_request_reference_id.to_string(),
                         ),
                         incremental_authorization_allowed: None,
+                        authentication_data: None,
                         charges: None,
                     }),
                     ..item.data
@@ -548,6 +552,7 @@ impl<F>
                 network_txn_id: None,
                 connector_response_reference_id: Some(item.response.order_number.to_string()),
                 incremental_authorization_allowed: None,
+                authentication_data: None,
                 charges: None,
             }),
             ..item.data
@@ -555,18 +560,12 @@ impl<F>
     }
 }
 
-impl<F>
-    TryFrom<ResponseRouterData<F, BamboraPaymentsResponse, PaymentsSyncData, PaymentsResponseData>>
-    for RouterData<F, PaymentsSyncData, PaymentsResponseData>
+impl TryFrom<PaymentsSyncResponseRouterData<BamboraPaymentsResponse>>
+    for types::PaymentsSyncRouterData
 {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(
-        item: ResponseRouterData<
-            F,
-            BamboraPaymentsResponse,
-            PaymentsSyncData,
-            PaymentsResponseData,
-        >,
+        item: PaymentsSyncResponseRouterData<BamboraPaymentsResponse>,
     ) -> Result<Self, Self::Error> {
         Ok(Self {
             status: match item.data.request.is_auto_capture()? {
@@ -593,6 +592,7 @@ impl<F>
                 network_txn_id: None,
                 connector_response_reference_id: Some(item.response.order_number.to_string()),
                 incremental_authorization_allowed: None,
+                authentication_data: None,
                 charges: None,
             }),
             ..item.data
@@ -600,19 +600,12 @@ impl<F>
     }
 }
 
-impl<F>
-    TryFrom<
-        ResponseRouterData<F, BamboraPaymentsResponse, PaymentsCaptureData, PaymentsResponseData>,
-    > for RouterData<F, PaymentsCaptureData, PaymentsResponseData>
+impl TryFrom<PaymentsCaptureResponseRouterData<BamboraPaymentsResponse>>
+    for types::PaymentsCaptureRouterData
 {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(
-        item: ResponseRouterData<
-            F,
-            BamboraPaymentsResponse,
-            PaymentsCaptureData,
-            PaymentsResponseData,
-        >,
+        item: PaymentsCaptureResponseRouterData<BamboraPaymentsResponse>,
     ) -> Result<Self, Self::Error> {
         Ok(Self {
             status: if item.response.approved.as_str() == "1" {
@@ -628,6 +621,7 @@ impl<F>
                 network_txn_id: None,
                 connector_response_reference_id: Some(item.response.order_number.to_string()),
                 incremental_authorization_allowed: None,
+                authentication_data: None,
                 charges: None,
             }),
             ..item.data
@@ -635,19 +629,12 @@ impl<F>
     }
 }
 
-impl<F>
-    TryFrom<
-        ResponseRouterData<F, BamboraPaymentsResponse, PaymentsCancelData, PaymentsResponseData>,
-    > for RouterData<F, PaymentsCancelData, PaymentsResponseData>
+impl TryFrom<PaymentsCancelResponseRouterData<BamboraPaymentsResponse>>
+    for types::PaymentsCancelRouterData
 {
     type Error = error_stack::Report<errors::ConnectorError>;
     fn try_from(
-        item: ResponseRouterData<
-            F,
-            BamboraPaymentsResponse,
-            PaymentsCancelData,
-            PaymentsResponseData,
-        >,
+        item: PaymentsCancelResponseRouterData<BamboraPaymentsResponse>,
     ) -> Result<Self, Self::Error> {
         Ok(Self {
             status: if item.response.approved.as_str() == "1" {
@@ -663,6 +650,7 @@ impl<F>
                 network_txn_id: None,
                 connector_response_reference_id: Some(item.response.order_number.to_string()),
                 incremental_authorization_allowed: None,
+                authentication_data: None,
                 charges: None,
             }),
             ..item.data
@@ -674,7 +662,7 @@ impl<F>
 // Type definition for RefundRequest
 #[derive(Default, Debug, Serialize)]
 pub struct BamboraRefundRequest {
-    amount: f64,
+    amount: FloatMajorUnit,
 }
 
 impl<F> TryFrom<BamboraRouterData<&types::RefundsRouterData<F>>> for BamboraRefundRequest {
@@ -720,7 +708,7 @@ pub struct RefundResponse {
     pub message: String,
     pub auth_code: String,
     pub created: String,
-    pub amount: f32,
+    pub amount: FloatMajorUnit,
     pub order_number: String,
     #[serde(rename = "type")]
     pub payment_type: String,
